@@ -304,6 +304,9 @@ def cmd_open(args) -> None:
         set theMb to mailbox "{mb_escaped}" of account "{acct_escaped}"
         set theMsg to (first message of theMb whose id is {message_id})
         set msgSubject to subject of theMsg
+        if (count of message viewers) is 0 then
+            make new message viewer
+        end if
         set selected mailboxes of first message viewer to {{theMb}}
         set selected messages of first message viewer to {{theMsg}}
         activate

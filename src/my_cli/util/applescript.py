@@ -47,15 +47,16 @@ def run(script: str, timeout: int = APPLESCRIPT_TIMEOUT) -> str:
 
     if result.returncode != 0:
         err = result.stderr.strip()
-        if "not authorized" in err.lower():
+        err_lower = err.lower().replace("\u2018", "'").replace("\u2019", "'")
+        if "not authorized" in err_lower:
             msg = "Mail access denied. Grant access in System Settings > Privacy & Security > Automation."
-        elif "application isn't running" in err.lower():
+        elif "application isn't running" in err_lower:
             msg = "Mail.app is not running. Please open Mail and try again."
-        elif "can't get account" in err.lower():
+        elif "can't get account" in err_lower:
             msg = f"Account not found. Run `my mail accounts` to see available accounts.\n{err}"
-        elif "can't get mailbox" in err.lower():
+        elif "can't get mailbox" in err_lower:
             msg = f"Mailbox not found. Run `my mail mailboxes` to see available mailboxes.\n{err}"
-        elif "can't get message" in err.lower():
+        elif "can't get message" in err_lower:
             msg = f"Message not found — it may have been moved or deleted.\n{err}"
         else:
             msg = f"AppleScript error: {err}"

@@ -462,3 +462,19 @@ def test_cmd_open_json(monkeypatch, mock_args, capsys):
     assert '"opened": true' in captured.out
     assert '"message_id": 12345' in captured.out
     assert '"subject": "Test Subject"' in captured.out
+
+
+def test_cmd_open_viewer_guard(monkeypatch, mock_args, capsys):
+    """cmd_open AppleScript includes a guard to create a viewer if none exists."""
+    from my_cli.commands.mail.actions import cmd_open
+
+    mock_run = Mock(return_value="Test Subject")
+    monkeypatch.setattr("my_cli.commands.mail.actions.run", mock_run)
+
+    args = mock_args(id=12345)
+    cmd_open(args)
+
+    # Verify the AppleScript passed to run() contains the viewer guard
+    script = mock_run.call_args[0][0]
+    assert "count of message viewers" in script
+    assert "make new message viewer" in script

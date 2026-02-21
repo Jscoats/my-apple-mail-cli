@@ -1,8 +1,11 @@
 """Tests for applescript module."""
 
 import os
+from unittest.mock import Mock
 
-from my_cli.util.applescript import escape, sanitize_path
+import pytest
+
+from my_cli.util.applescript import escape, run, sanitize_path
 
 
 class TestEscape:
@@ -47,3 +50,49 @@ class TestSanitizePath:
     def test_absolute_path(self):
         result = sanitize_path("/tmp/test")
         assert result == "/tmp/test"
+
+
+class TestRunSmartQuotes:
+    """Test that smart-quoted AppleScript errors trigger friendly messages."""
+
+    def test_smart_quote_account_not_found(self, monkeypatch, capsys):
+        """Smart-quoted can\u2019t get account triggers friendly error."""
+        mock_result = Mock()
+        mock_result.returncode = 1
+        mock_result.stderr = "Can\u2019t get account \"Foo\". (-1728)"
+
+        monkeypatch.setattr("my_cli.util.applescript.subprocess.run", lambda *a, **kw: mock_result)
+
+        with pytest.raises(SystemExit):
+            run("dummy script")
+
+        captured = capsys.readouterr()
+        assert "Account not found" in captured.err
+
+    def test_smart_quote_message_not_found(self, monkeypatch, capsys):
+        """Smart-quoted can\u2019t get message triggers friendly error."""
+        mock_result = Mock()
+        mock_result.returncode = 1
+        mock_result.stderr = "Can\u2019t get message 1 of mailbox \"INBOX\". (-1719)"
+
+        monkeypatch.setattr("my_cli.util.applescript.subprocess.run", lambda *a, **kw: mock_result)
+
+        with pytest.raises(SystemExit):
+            run("dummy script")
+
+        captured = capsys.readouterr()
+        assert "Message not found" in captured.err
+
+    def test_straight_quote_still_works(self, monkeypatch, capsys):
+        """ASCII straight-quoted can't get account still works."""
+        mock_result = Mock()
+        mock_result.returncode = 1
+        mock_result.stderr = "Can't get account \"Bar\". (-1728)"
+
+        monkeypatch.setattr("my_cli.util.applescript.subprocess.run", lambda *a, **kw: mock_result)
+
+        with pytest.raises(SystemExit):
+            run("dummy script")
+
+        captured = capsys.readouterr()
+        assert "Account not found" in captured.err
