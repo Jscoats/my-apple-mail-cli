@@ -25,6 +25,9 @@ Love Apple Mail but wish you could control it from the terminal? You're not alon
 
 ```bash
 # Requires Python 3.10+ and macOS
+pip install git+https://github.com/Jscoats/my-apple-mail-cli
+
+# Or with uv (faster)
 uv tool install git+https://github.com/Jscoats/my-apple-mail-cli
 ```
 
