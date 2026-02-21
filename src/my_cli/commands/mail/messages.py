@@ -202,7 +202,7 @@ def cmd_read(args) -> None:
     if reply_to:
         text += f"\nReply-To: {reply_to}"
     text += f"\nDate: {date}"
-    text += f"\n\nStatus:"
+    text += "\n\nStatus:"
     text += f"\n  Read: {read}  Flagged: {flagged}  Junk: {junk}"
     text += f"\n  Forwarded: {forwarded}  Replied: {replied}"
     text += f"\n\nAttachments: {att_count}"

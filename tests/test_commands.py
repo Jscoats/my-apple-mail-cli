@@ -1,9 +1,7 @@
 """Smoke tests for top 10 mail command functions."""
 
-from argparse import Namespace
 from unittest.mock import Mock
 
-import pytest
 
 from my_cli.config import FIELD_SEPARATOR
 

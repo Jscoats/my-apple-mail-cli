@@ -1,12 +1,10 @@
 """AI-optimized mail commands designed for Claude Code: summary, triage, context, find-related."""
 
-import re
 from collections import defaultdict
 
 from my_cli.config import (
     DEFAULT_DIGEST_LIMIT,
     DEFAULT_MAILBOX,
-    DEFAULT_MESSAGE_LIMIT,
     APPLESCRIPT_TIMEOUT_LONG,
     FIELD_SEPARATOR,
     RECORD_SEPARATOR,

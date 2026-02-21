@@ -2,17 +2,14 @@
 
 import os
 import re
-from datetime import datetime
 from email.utils import parseaddr
 
 from my_cli.config import (
     APPLESCRIPT_TIMEOUT_BATCH,
     APPLESCRIPT_TIMEOUT_LONG,
     DEFAULT_MAILBOX,
-    DEFAULT_MESSAGE_LIMIT,
     MAX_EXPORT_BULK_LIMIT,
     resolve_account,
-    validate_limit,
 )
 from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import die, format_output, truncate

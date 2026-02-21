@@ -17,7 +17,7 @@ def mock_run(monkeypatch):
 
     # Mock the template function to return a simple script
     def mock_template(inner_ops, cap=20):
-        return f'tell application "Mail"\nset output to ""\nend tell'
+        return 'tell application "Mail"\nset output to ""\nend tell'
 
     monkeypatch.setattr(
         "my_cli.commands.mail.ai.inbox_iterator_all_accounts",

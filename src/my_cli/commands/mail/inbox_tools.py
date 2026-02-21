@@ -135,7 +135,7 @@ def cmd_process_inbox(args) -> None:
             text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
         if len(flagged) > 5:
             text += f"\n  ... and {len(flagged) - 5} more"
-        text += f"\n\nSuggested commands:"
+        text += "\n\nSuggested commands:"
         text += f"\n  my mail read <ID> -a \"{flagged[0]['account']}\""
         text += f"\n  my mail to-todoist <ID> -a \"{flagged[0]['account']}\" --priority 4"
 
@@ -146,7 +146,7 @@ def cmd_process_inbox(args) -> None:
             text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
         if len(people) > 5:
             text += f"\n  ... and {len(people) - 5} more"
-        text += f"\n\nSuggested commands:"
+        text += "\n\nSuggested commands:"
         text += f"\n  my mail read <ID> -a \"{people[0]['account']}\""
         text += f"\n  my mail mark-read <ID> -a \"{people[0]['account']}\""
 
@@ -157,7 +157,7 @@ def cmd_process_inbox(args) -> None:
             text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
         if len(notifications) > 5:
             text += f"\n  ... and {len(notifications) - 5} more"
-        text += f"\n\nSuggested commands:"
+        text += "\n\nSuggested commands:"
         text += f"\n  my mail batch-read <ID1> <ID2> ... -a \"{notifications[0]['account']}\""
         text += f"\n  my mail unsubscribe <ID> -a \"{notifications[0]['account']}\""
 
@@ -364,7 +364,7 @@ def cmd_weekly_review(args) -> None:
         """
     else:
         # Scan all enabled accounts
-        flagged_script = f"""
+        flagged_script = """
         tell application "Mail"
             set output to ""
             repeat with acct in (every account)

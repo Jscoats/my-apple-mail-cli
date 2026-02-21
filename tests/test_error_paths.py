@@ -125,7 +125,6 @@ class TestBatchOperationDryRun:
 
     def test_batch_operations_have_dry_run_parameter(self):
         """Verify batch commands support dry_run parameter."""
-        from inspect import signature
         from my_cli.commands.mail.batch import cmd_batch_move, cmd_batch_delete
 
         # Both should accept args with dry_run attribute

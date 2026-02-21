@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from my_cli.config import (
     APPLESCRIPT_TIMEOUT_LONG,
     DEFAULT_MAILBOX,
-    FIELD_SEPARATOR,
     resolve_account,
 )
 from my_cli.util.applescript import escape, run
@@ -236,7 +235,7 @@ def cmd_batch_delete(args) -> None:
         die(f"This will delete {total_count} messages from '{mailbox}' older than {older_than_days} days. Use --force to confirm.")
 
     # Actually delete the messages and collect their IDs for undo logging
-    limit_clause = f"if deleteCount >= {limit} then exit repeat" if limit else ""
+    _limit_clause = f"if deleteCount >= {limit} then exit repeat" if limit else ""  # noqa: F841
 
     delete_script = f"""
     tell application "Mail"

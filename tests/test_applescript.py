@@ -1,7 +1,6 @@
 """Tests for applescript module."""
 
 import os
-from unittest.mock import patch
 
 from my_cli.util.applescript import escape, sanitize_path
 

@@ -37,7 +37,7 @@ def cmd_draft(args) -> None:
             if not body or body == "":
                 body = template.get("body", "")
         else:
-            die(f"No templates file found. Create templates with 'my mail templates create'.")
+            die("No templates file found. Create templates with 'my mail templates create'.")
 
     # Validate that we have subject and body
     if not subject:

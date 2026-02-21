@@ -9,8 +9,6 @@ from datetime import datetime
 from my_cli.config import (
     CONFIG_DIR,
     APPLESCRIPT_TIMEOUT_LONG,
-    FIELD_SEPARATOR,
-    resolve_account,
 )
 from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import die, format_output

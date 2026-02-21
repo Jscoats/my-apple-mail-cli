@@ -1,7 +1,6 @@
 """Tests for config module."""
 
 import json
-from pathlib import Path
 
 from my_cli.config import resolve_account, validate_limit
 

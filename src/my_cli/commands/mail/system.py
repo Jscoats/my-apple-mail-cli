@@ -122,7 +122,7 @@ def cmd_rules(args) -> None:
     """List or manage mail rules."""
     action = getattr(args, "action", None)
     rule_name = getattr(args, "rule_name", None)
-    mailbox = getattr(args, "mailbox", None)
+    _mailbox = getattr(args, "mailbox", None)  # noqa: F841
 
     if action == "enable" and rule_name:
         _toggle_rule(args, rule_name, True)

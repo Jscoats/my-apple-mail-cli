@@ -5,7 +5,6 @@ from argparse import Namespace
 import pytest
 
 from my_cli.util.mail_helpers import resolve_message_context
-from my_cli.util.formatting import die
 
 
 def test_resolve_message_context_with_account(monkeypatch):

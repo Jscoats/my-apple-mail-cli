@@ -9,7 +9,7 @@ from my_cli.config import (
     FIELD_SEPARATOR,
     get_config,
 )
-from my_cli.util.applescript import escape, run
+from my_cli.util.applescript import run
 from my_cli.util.formatting import die, format_output
 from my_cli.util.mail_helpers import resolve_message_context
 
@@ -81,7 +81,7 @@ def cmd_to_todoist(args) -> None:
     try:
         with urllib.request.urlopen(req, context=ssl_context) as response:
             response_data = json.loads(response.read().decode("utf-8"))
-            task_id = response_data.get("id")
+            _task_id = response_data.get("id")  # noqa: F841
             task_url = response_data.get("url")
 
             text = f"Created Todoist task: {subject}"
