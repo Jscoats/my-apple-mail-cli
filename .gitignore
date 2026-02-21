@@ -30,3 +30,6 @@ REDDIT_LAUNCH.md
 
 # Local development instructions (personal, not for public repo)
 CLAUDE.md
+
+# Lock files
+uv.lock

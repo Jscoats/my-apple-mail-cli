@@ -204,7 +204,7 @@ The CLI is the bridge between Mail.app and whatever tools you use — AI, script
 Built with modern Python patterns:
 - **Zero runtime dependencies** (stdlib only)
 - **Comprehensive test suite** (~1,500 LOC of tests)
-- **Modular command structure** (14 focused modules)
+- **Modular command structure** (16 focused modules)
 - **AppleScript bridge** for Mail.app communication
 - **Three-tier account resolution** (explicit flag → config default → last-used)
 
