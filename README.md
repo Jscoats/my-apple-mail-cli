@@ -1,5 +1,9 @@
 # apple-mail-cli
 
+[![CI](https://github.com/Jscoats/apple-mail-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Jscoats/apple-mail-cli/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 > A comprehensive command-line interface for Apple Mail on macOS
 
 **Never leave your terminal.** Manage your Apple Mail with 50+ powerful commands, AI-powered workflows, and modern productivity integrations.
@@ -146,7 +150,7 @@ Built with modern Python patterns:
 - **AppleScript bridge** for Mail.app communication
 - **Three-tier account resolution** (explicit flag → config default → last-used)
 
-See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation.
 
 ## 🤝 Contributing
 
