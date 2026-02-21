@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `inbox` now accepts `-a` / `--account` to scope results to a single account ✓
 - `triage` now accepts `-a` / `--account` to filter unread to a single account ✓
+- `batch-delete` indexed iteration bug — list shifts after each delete causing skips and crashes ✓
+- `batch-delete` Gmail All Mail error — individual deletions now wrapped in `try/end try` so one IMAP failure doesn't abort the whole batch ✓
 - `accounts --json` returning empty `[]` instead of account data
 - Raw AppleScript error messages now wrapped in user-friendly output
 

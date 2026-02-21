@@ -268,22 +268,25 @@ def cmd_batch_delete(args) -> None:
         die(f"This will delete {total_count} messages {filter_desc} from {scope_desc}. Use --force to confirm.")
 
     # Build delete script
+    # Use "repeat with m in list" (not indexed) so deletions don't shift remaining references.
+    # Wrap each delete in try/end try so a single failure (e.g. Gmail All Mail quirk) doesn't
+    # abort the whole batch — failures are silently skipped and the count reflects actual deletes.
+    limit_check = f"if deleteCount >= {limit} then exit repeat" if limit else ""
     if mailbox:
         mb_escaped = escape(mailbox)
-        cap_expr = limit if limit else "count of targetMsgs"
         delete_script = f"""
         tell application "Mail"
             set mb to mailbox "{mb_escaped}" of account "{acct_escaped}"
             set targetMsgs to (every message of mb whose {where_clause})
             set deleteCount to 0
             set deletedIds to {{}}
-            set cap to {cap_expr}
-            if (count of targetMsgs) < cap then set cap to count of targetMsgs
-            repeat with i from 1 to cap
-                set m to item i of targetMsgs
-                set end of deletedIds to (id of m)
-                delete m
-                set deleteCount to deleteCount + 1
+            repeat with m in targetMsgs
+                {limit_check}
+                try
+                    set end of deletedIds to (id of m)
+                    delete m
+                    set deleteCount to deleteCount + 1
+                end try
             end repeat
             set output to (deleteCount as text)
             repeat with msgId in deletedIds
@@ -293,7 +296,6 @@ def cmd_batch_delete(args) -> None:
         end tell
         """
     else:
-        limit_check = f"if deleteCount >= {limit} then exit repeat" if limit else ""
         delete_script = f"""
         tell application "Mail"
             set deleteCount to 0
@@ -301,13 +303,13 @@ def cmd_batch_delete(args) -> None:
             repeat with mbox in (mailboxes of account "{acct_escaped}")
                 {limit_check}
                 set targetMsgs to (every message of mbox whose {where_clause})
-                set msgCap to count of targetMsgs
-                repeat with i from 1 to msgCap
+                repeat with m in targetMsgs
                     {limit_check}
-                    set m to item i of targetMsgs
-                    set end of deletedIds to (id of m)
-                    delete m
-                    set deleteCount to deleteCount + 1
+                    try
+                        set end of deletedIds to (id of m)
+                        delete m
+                        set deleteCount to deleteCount + 1
+                    end try
                 end repeat
             end repeat
             set output to (deleteCount as text)
