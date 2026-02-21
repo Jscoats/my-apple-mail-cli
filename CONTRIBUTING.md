@@ -67,7 +67,7 @@ pytest
 **Documentation:**
 - Update README.md if adding user-facing features
 - Add docstrings to new functions
-- Update CLAUDE.md for architectural changes
+- Update ARCHITECTURE.md for architectural changes
 
 ### Pull Request Process
 
