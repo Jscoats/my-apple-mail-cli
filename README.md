@@ -4,22 +4,20 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-> A comprehensive command-line interface for Apple Mail on macOS
-
-**Never leave your terminal.** Manage your Apple Mail with 50+ powerful commands, smart workflows, and modern productivity integrations.
+> Automate and extend Apple Mail from the terminal — with structured output designed for AI workflows.
 
 ## ✨ Why This Exists
 
-Use Apple Mail but wish you could control it from the terminal? This brings the full power of Mail.app to your command line — with smart triage, summaries, and inbox automation built in.
+Use Apple Mail but want to automate it? This CLI gives you full control of Mail.app from the terminal. Every command outputs structured data that works with AI assistants, shell scripts, or status bars — so you can triage your inbox with Claude, pipe unread counts to your tmux bar, or batch-process newsletters without opening Mail.app.
 
 ## 🚀 Key Features
 
 - **50+ Commands** - Everything from basic operations to advanced batch processing
-- **Smart Workflows** - Inbox triage, intelligent summaries, context-aware search
+- **Built for AI Workflows** - Every command supports `--json` output designed for AI assistants to read and act on
 - **Batch Operations with Undo** - Process hundreds of emails safely with rollback support
-- **Productivity Integrations** - Send emails to Todoist, use templates, automate workflows
+- **Productivity Integrations** - Todoist, templates, scripting, status bar integration
 - **Zero Dependencies** - Pure Python stdlib, no external packages required
-- **JSON Output Mode** - Every command supports `--json` for scripting and automation
+- **Works with Your Existing Setup** - Doesn't replace Mail.app, extends it
 
 ## 📦 Installation
 
@@ -77,7 +75,7 @@ my mail to-todoist 123 --project Work
 - `unsubscribe` - Unsubscribe from mailing lists via List-Unsubscribe header (supports one-click RFC 8058)
 - `attachments`, `save-attachment` - Handle attachments
 
-### Smart Features
+### AI-Ready Features
 - `summary` - Ultra-concise summaries optimized for AI assistants
 - `triage` - Smart categorization by urgency (flagged → people → notifications)
 - `context` - Thread messages with parent/child relationships
@@ -155,6 +153,37 @@ my mail templates create "meeting-followup" \
 # Use it
 my mail draft --to client@company.com --template "meeting-followup"
 ```
+
+## 🤖 Built for AI Workflows
+
+Every command supports `--json`, making your inbox data available to any AI assistant. Commands like `summary`, `triage`, and `context` are specifically designed to give AI a structured understanding of your inbox in seconds.
+
+### With Claude Code
+```bash
+# Just ask Claude to check your mail
+"Run my mail triage and tell me what's urgent"
+"Summarize my unread mail and create Todoist tasks for anything that needs action"
+```
+
+### With any AI tool
+```bash
+# Pipe structured data to any LLM CLI
+my mail summary --json | llm "What needs my attention?"
+
+# Feed triage results to AI for prioritization
+my mail triage --json | llm "Draft responses for the urgent items"
+```
+
+### For scripting and automation
+```bash
+# Unread count for your status bar
+my mail count
+
+# Export to JSON for any workflow
+my mail inbox --json | jq '.accounts[].unread_count'
+```
+
+The CLI is the bridge between Mail.app and whatever tools you use — AI, scripts, or both.
 
 ## 🏗️ Architecture
 
