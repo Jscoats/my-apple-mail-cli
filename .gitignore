@@ -27,3 +27,6 @@ mail-undo.json
 
 # Launch materials (not for public repo)
 REDDIT_LAUNCH.md
+
+# Local development instructions (personal, not for public repo)
+CLAUDE.md

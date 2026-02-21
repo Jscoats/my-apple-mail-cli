@@ -39,8 +39,8 @@ Have an idea? [Open a feature request](https://github.com/Jscoats/my-apple-mail-
 git clone https://github.com/Jscoats/my-apple-mail-cli.git
 cd my-apple-mail-cli
 
-# Install in editable mode
-uv tool install -e .
+# Install in editable mode with dev dependencies
+pip install -e ".[dev]"
 
 # Run tests
 pytest

@@ -1,10 +1,10 @@
 # Architecture
 
-This document explains the high-level design of apple-mail-cli for contributors.
+This document explains the high-level design of my-apple-mail-cli for contributors.
 
 ## Overview
 
-apple-mail-cli is a Python CLI that controls Apple Mail via AppleScript. It uses zero external runtime dependencies — everything is built on Python's standard library.
+my-apple-mail-cli is a Python CLI that controls Apple Mail via AppleScript. It uses zero external runtime dependencies — everything is built on Python's standard library.
 
 ```
 User → CLI (argparse) → Command Module → AppleScript Bridge → Mail.app

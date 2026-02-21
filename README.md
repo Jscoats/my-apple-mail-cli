@@ -1,4 +1,4 @@
-# apple-mail-cli
+# my-apple-mail-cli
 
 [![CI](https://github.com/Jscoats/my-apple-mail-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Jscoats/my-apple-mail-cli/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
@@ -71,6 +71,7 @@ my mail to-todoist 123 --project Work
 - `search` - Find messages by subject/sender
 - `mark-read`, `mark-unread`, `flag`, `unflag` - Message actions
 - `move`, `delete` - Organize messages
+- `unsubscribe` - Unsubscribe from mailing lists via List-Unsubscribe header (supports one-click RFC 8058)
 - `attachments`, `save-attachment` - Handle attachments
 
 ### AI-Powered Features
@@ -120,7 +121,7 @@ my mail list -a "Work Email"
 my mail list -a "Personal"
 
 # Set default account in ~/.config/my/config.json
-{"default_account": "iCloud"}
+{"mail": {"default_account": "iCloud"}}
 ```
 
 ### JSON Output for Automation
@@ -133,7 +134,7 @@ my mail search "invoice" --json | jq '.[].subject'
 ### Todoist Integration
 ```bash
 # Add your Todoist API token to ~/.config/my/config.json
-{"todoist_api_token": "your-token-here"}
+{"mail": {"default_account": "iCloud"}, "todoist_api_token": "your-token-here"}
 
 # Then send any email as a Todoist task
 my mail to-todoist 123 --project Work

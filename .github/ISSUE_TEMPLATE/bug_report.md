@@ -23,7 +23,7 @@ assignees: ''
 ## Environment
 - macOS version:
 - Python version: (`python3 --version`)
-- apple-mail-cli version:
+- my-apple-mail-cli version:
 - Mail.app version:
 
 ## Error Messages

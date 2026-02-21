@@ -235,8 +235,6 @@ def cmd_batch_delete(args) -> None:
         die(f"This will delete {total_count} messages from '{mailbox}' older than {older_than_days} days. Use --force to confirm.")
 
     # Actually delete the messages and collect their IDs for undo logging
-    _limit_clause = f"if deleteCount >= {limit} then exit repeat" if limit else ""  # noqa: F841
-
     delete_script = f"""
     tell application "Mail"
         set mb to mailbox "{mb_escaped}" of account "{acct_escaped}"
