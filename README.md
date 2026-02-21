@@ -1,6 +1,6 @@
 # apple-mail-cli
 
-[![CI](https://github.com/Jscoats/apple-mail-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Jscoats/apple-mail-cli/actions/workflows/ci.yml)
+[![CI](https://github.com/Jscoats/my-apple-mail-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Jscoats/my-apple-mail-cli/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -25,7 +25,7 @@ Love Apple Mail but wish you could control it from the terminal? You're not alon
 
 ```bash
 # Requires Python 3.10+ and macOS
-uv tool install git+https://github.com/Jscoats/apple-mail-cli
+uv tool install git+https://github.com/Jscoats/my-apple-mail-cli
 ```
 
 ## 🎯 Quick Start
@@ -167,7 +167,7 @@ Built because no comprehensive Apple Mail CLI existed. Inspired by the need to a
 ## 📮 Contact
 
 - **GitHub:** [@Jscoats](https://github.com/Jscoats)
-- **Issues:** [Report bugs or request features](https://github.com/Jscoats/apple-mail-cli/issues)
+- **Issues:** [Report bugs or request features](https://github.com/Jscoats/my-apple-mail-cli/issues)
 
 ---
 
