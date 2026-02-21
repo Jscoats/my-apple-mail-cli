@@ -1,4 +1,4 @@
-"""System mail commands: check, headers, rules, signatures, junk, not-junk."""
+"""System mail commands: check, headers, rules, junk, not-junk."""
 
 from my_cli.config import (
     DEFAULT_MAILBOX,
@@ -180,35 +180,6 @@ def _toggle_rule(args, name: str, enabled: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
-# signatures
-# ---------------------------------------------------------------------------
-
-def cmd_signatures(args) -> None:
-    """List email signatures."""
-    # AppleScript doesn't have great signature access, but we can try
-    script = """
-    tell application "Mail"
-        set output to ""
-        repeat with sig in (every signature)
-            set sigName to name of sig
-            set output to output & sigName & linefeed
-        end repeat
-        return output
-    end tell
-    """
-    result = run(script)
-    if not result.strip():
-        format_output(args, "No signatures found.")
-        return
-
-    sigs = [s.strip() for s in result.strip().split("\n") if s.strip()]
-    text = "Email Signatures:"
-    for s in sigs:
-        text += f"\n  - {s}"
-    format_output(args, text, json_data=sigs)
-
-
-# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 
@@ -232,6 +203,3 @@ def register(subparsers) -> None:
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_rules)
 
-    p = subparsers.add_parser("signatures", help="List email signatures")
-    p.add_argument("--json", action="store_true", help="Output as JSON")
-    p.set_defaults(func=cmd_signatures)

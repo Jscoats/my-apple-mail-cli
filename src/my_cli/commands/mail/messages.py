@@ -171,6 +171,10 @@ def cmd_read(args) -> None:
         to_list, cc_list, reply_to, content, att_count,
     ) = parts[:16]
 
+    # U+FFFC (object replacement character) appears where HTML emails embed
+    # inline images. Replace with a readable placeholder.
+    content = content.replace("\ufffc", "[image]")
+
     # Build JSON data
     data = {
         "id": int(msg_id) if msg_id.isdigit() else msg_id,

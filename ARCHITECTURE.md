@@ -33,7 +33,7 @@ src/my_cli/
         ├── manage.py              # create-mailbox, delete-mailbox, empty-trash
         ├── batch.py               # batch-read, batch-flag, batch-move, batch-delete
         ├── analytics.py           # stats, top-senders, digest, show-flagged
-        ├── system.py              # check, headers, rules, signatures, junk, not-junk
+        ├── system.py              # check, headers, rules, junk, not-junk
         ├── composite.py           # export, thread, reply, forward
         ├── ai.py                  # summary, triage, context, find-related
         ├── templates.py           # templates list/create/show/delete

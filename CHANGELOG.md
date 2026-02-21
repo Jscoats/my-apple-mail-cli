@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Analytics** — `stats`, `top-senders`, `digest`, `show-flagged`, `weekly-review`, `clean-newsletters`
 - **Compose & templates** — `draft` with template support, `reply`, `forward`, `templates` subcommands
 - **Integrations** — `to-todoist` for sending emails as Todoist tasks, `export` for Mbox format
-- **System tools** — `check`, `headers`, `rules`, `signatures`, `junk`, `not-junk`
+- **System tools** — `check`, `headers`, `rules`, `junk`, `not-junk`
 - Multi-account support with three-tier account resolution
 - `--json` output mode on every command
 - Comprehensive test suite (146 tests)
