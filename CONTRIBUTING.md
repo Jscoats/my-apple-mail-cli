@@ -26,6 +26,15 @@ Have an idea? [Open a feature request](https://github.com/Jscoats/my-apple-mail-
 
 ## 🔧 Contributing Code
 
+### Prerequisites
+
+> **macOS required.** This tool uses AppleScript to control Mail.app, which is macOS-only. Contributors on Linux or Windows cannot run or test the tool. All development and testing must be done on macOS.
+
+- macOS 12 or later
+- Python 3.10+
+- Mail.app with at least one configured account
+- [`uv`](https://docs.astral.sh/uv/) (recommended) or `pip`
+
 ### Before You Start
 
 1. **Check existing issues** - Someone might already be working on it
@@ -39,11 +48,17 @@ Have an idea? [Open a feature request](https://github.com/Jscoats/my-apple-mail-
 git clone https://github.com/Jscoats/my-apple-mail-cli.git
 cd my-apple-mail-cli
 
-# Install in editable mode with dev dependencies
-pip install -e ".[dev]"
+# Install in editable mode (primary — uses uv)
+uv tool install -e .          # Install
+uv tool install -e . --force  # Reinstall after changes
 
 # Run tests
 pytest
+```
+
+**Fallback:** If you are not using `uv`, you can install with pip instead:
+```bash
+pip install -e ".[dev]"
 ```
 
 ### Code Guidelines

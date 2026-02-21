@@ -15,7 +15,13 @@ def cmd_init(args) -> None:
         existing = get_config()
         default_acct = existing.get("mail", {}).get("default_account") or existing.get("default_account", "")
         print(f"Existing config found. Default account: {default_acct or '(none)'}")
-        answer = input("Reconfigure? [y/N]: ").strip().lower()
+        try:
+            answer = input("Reconfigure? [y/N]: ").strip().lower()
+        except KeyboardInterrupt:
+            print("\nSetup cancelled.")
+            return
+        except EOFError:
+            answer = "n"
         if answer != "y":
             print("Keeping existing configuration.")
             if getattr(args, "json", False):
@@ -72,7 +78,13 @@ end tell
             print(f"  {i}. {acct['name']} ({acct['email']})")
 
         while True:
-            raw = input(f"\nSelect account [1-{len(enabled_accounts)}]: ").strip()
+            try:
+                raw = input(f"\nSelect account [1-{len(enabled_accounts)}]: ").strip()
+            except KeyboardInterrupt:
+                print("\nSetup cancelled.")
+                return
+            except EOFError:
+                raw = "1"
             if raw.isdigit() and 1 <= int(raw) <= len(enabled_accounts):
                 chosen = enabled_accounts[int(raw) - 1]
                 break
@@ -80,7 +92,13 @@ end tell
 
     # Optionally ask for Todoist API token
     todoist_token = ""
-    raw_token = input("\nTodoist API token (press Enter to skip): ").strip()
+    try:
+        raw_token = input("\nTodoist API token (press Enter to skip): ").strip()
+    except KeyboardInterrupt:
+        print("\nSetup cancelled.")
+        return
+    except EOFError:
+        raw_token = ""
     if raw_token:
         todoist_token = raw_token
 

@@ -22,7 +22,11 @@ def main() -> None:
         sys.exit(0)
 
     # Dispatch to the handler set by set_defaults(func=...)
-    if hasattr(args, "func"):
-        args.func(args)
-    else:
-        parser.parse_args([args.command, "--help"])
+    try:
+        if hasattr(args, "func"):
+            args.func(args)
+        else:
+            parser.parse_args([args.command, "--help"])
+    except KeyboardInterrupt:
+        print("\nCancelled.", file=sys.stderr)
+        sys.exit(130)
