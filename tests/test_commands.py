@@ -762,7 +762,7 @@ def test_cmd_digest_basic(monkeypatch, mock_args, capsys):
 
     captured = capsys.readouterr()
     assert "Unread Digest" in captured.out
-    assert "example.com" in captured.out
+    assert "news@example.com" in captured.out
     assert "[123]" in captured.out
 
 
