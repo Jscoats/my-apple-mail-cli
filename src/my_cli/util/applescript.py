@@ -114,11 +114,11 @@ def run(script: str, timeout: int = APPLESCRIPT_TIMEOUT_DEFAULT) -> str:
         elif "application isn't running" in err_lower:
             msg = "Mail.app is not running. Please open Mail and try again."
         elif "can't get account" in err_lower:
-            msg = f"Account not found. Run `my mail accounts` to see available accounts.\n{err}"
+            msg = "Account not found. Run `my mail accounts` to see available accounts."
         elif "can't get mailbox" in err_lower:
-            msg = f"Mailbox not found. Run `my mail mailboxes` to see available mailboxes.\n{err}"
+            msg = "Mailbox not found. Run `my mail mailboxes` to see available mailboxes."
         elif "can't get message" in err_lower:
-            msg = f"Message not found — it may have been moved or deleted.\n{err}"
+            msg = "Message not found — it may have been moved or deleted."
         else:
             msg = f"AppleScript error: {err}"
         print(f"Error: {msg}", file=sys.stderr)

@@ -146,36 +146,59 @@ def cmd_stats(args) -> None:
     """Show message count and unread count for a mailbox, or account-wide stats with --all."""
     show_all = getattr(args, "all", False)
     account = resolve_account(getattr(args, "account", None))
-    if not account:
-        die("Account required. Use -a ACCOUNT.")
 
     if show_all:
-        # Account-wide stats across all mailboxes
-        acct_escaped = escape(account)
-
-        script = f"""
-        tell application "Mail"
-            set acct to account "{acct_escaped}"
-            set output to ""
-            set grandTotal to 0
-            set grandUnread to 0
-            repeat with mb in (every mailbox of acct)
-                set mbName to name of mb
-                set totalCount to count of messages of mb
-                set unreadCount to unread count of mb
-                set grandTotal to grandTotal + totalCount
-                set grandUnread to grandUnread + unreadCount
-                set output to output & mbName & "{FIELD_SEPARATOR}" & (totalCount as text) & "{FIELD_SEPARATOR}" & (unreadCount as text) & linefeed
-            end repeat
-            return (grandTotal as text) & "{FIELD_SEPARATOR}" & (grandUnread as text) & linefeed & output
-        end tell
-        """
+        if account:
+            # --all -a ACCOUNT: stats for every mailbox in one account
+            acct_escaped = escape(account)
+            script = f"""
+            tell application "Mail"
+                set acct to account "{acct_escaped}"
+                set acctName to name of acct
+                set output to ""
+                set grandTotal to 0
+                set grandUnread to 0
+                repeat with mb in (every mailbox of acct)
+                    set mbName to name of mb
+                    set totalCount to count of messages of mb
+                    set unreadCount to unread count of mb
+                    set grandTotal to grandTotal + totalCount
+                    set grandUnread to grandUnread + unreadCount
+                    set output to output & acctName & "{FIELD_SEPARATOR}" & mbName & "{FIELD_SEPARATOR}" & (totalCount as text) & "{FIELD_SEPARATOR}" & (unreadCount as text) & linefeed
+                end repeat
+                return (grandTotal as text) & "{FIELD_SEPARATOR}" & (grandUnread as text) & linefeed & output
+            end tell
+            """
+        else:
+            # --all (no -a): stats for every mailbox across ALL accounts
+            script = f"""
+            tell application "Mail"
+                set output to ""
+                set grandTotal to 0
+                set grandUnread to 0
+                repeat with acct in (every account)
+                    if enabled of acct then
+                        set acctName to name of acct
+                        repeat with mb in (every mailbox of acct)
+                            set mbName to name of mb
+                            set totalCount to count of messages of mb
+                            set unreadCount to unread count of mb
+                            set grandTotal to grandTotal + totalCount
+                            set grandUnread to grandUnread + unreadCount
+                            set output to output & acctName & "{FIELD_SEPARATOR}" & mbName & "{FIELD_SEPARATOR}" & (totalCount as text) & "{FIELD_SEPARATOR}" & (unreadCount as text) & linefeed
+                        end repeat
+                    end if
+                end repeat
+                return (grandTotal as text) & "{FIELD_SEPARATOR}" & (grandUnread as text) & linefeed & output
+            end tell
+            """
 
         result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
         lines = result.strip().split("\n")
         if not lines:
-            format_output(args, f"No mailboxes found in account '{account}'.",
-                          json_data={"account": account, "mailboxes": []})
+            scope = f"account '{account}'" if account else "any account"
+            format_output(args, f"No mailboxes found in {scope}.",
+                          json_data={"mailboxes": []})
             return
 
         # First line has grand totals
@@ -183,34 +206,39 @@ def cmd_stats(args) -> None:
         grand_total = int(totals_parts[0]) if len(totals_parts) >= 1 and totals_parts[0].isdigit() else 0
         grand_unread = int(totals_parts[1]) if len(totals_parts) >= 2 and totals_parts[1].isdigit() else 0
 
-        # Subsequent lines are per-mailbox
+        # Subsequent lines: acctName|mbName|total|unread
         mailboxes = []
         for line in lines[1:]:
             if not line.strip():
                 continue
             parts = line.split(FIELD_SEPARATOR)
-            if len(parts) >= 3:
+            if len(parts) >= 4:
                 mailboxes.append({
-                    "name": parts[0],
-                    "total": int(parts[1]) if parts[1].isdigit() else 0,
-                    "unread": int(parts[2]) if parts[2].isdigit() else 0,
+                    "account": parts[0],
+                    "name": parts[1],
+                    "total": int(parts[2]) if parts[2].isdigit() else 0,
+                    "unread": int(parts[3]) if parts[3].isdigit() else 0,
                 })
 
         # Build text output
-        text = f"Account: {account}\n"
+        scope_label = f"Account: {account}" if account else "All Accounts"
+        text = f"{scope_label}\n"
         text += f"Total: {grand_total} messages, {grand_unread} unread\n"
         text += f"\nMailboxes ({len(mailboxes)}):"
         for mb in mailboxes:
-            text += f"\n  {mb['name']}: {mb['total']} messages, {mb['unread']} unread"
+            acct_prefix = "" if account else f"[{mb['account']}] "
+            text += f"\n  {acct_prefix}{mb['name']}: {mb['total']} messages, {mb['unread']} unread"
 
         format_output(args, text, json_data={
-            "account": account,
+            "scope": account or "all",
             "total_messages": grand_total,
             "total_unread": grand_unread,
             "mailboxes": mailboxes,
         })
     else:
         # Single mailbox stats (existing behavior)
+        if not account:
+            die("Account required. Use -a ACCOUNT.")
         mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
         acct_escaped = escape(account)
         mb_escaped = escape(mailbox)

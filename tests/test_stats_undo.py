@@ -14,11 +14,12 @@ class TestEnhancedStats:
     def test_stats_all_flag_shows_all_mailboxes(self, mock_run, mock_args, capsys):
         """Test that --all flag shows account-wide stats."""
         # Mock AppleScript output: grand totals on first line, then per-mailbox
+        # Format: acctName|mbName|total|unread (4 fields per mailbox line)
         mock_run.return_value = (
             f"150{FIELD_SEPARATOR}25\n"  # Grand totals: 150 total, 25 unread
-            f"INBOX{FIELD_SEPARATOR}100{FIELD_SEPARATOR}20\n"
-            f"Sent Messages{FIELD_SEPARATOR}30{FIELD_SEPARATOR}0\n"
-            f"Archive{FIELD_SEPARATOR}20{FIELD_SEPARATOR}5"
+            f"iCloud{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}100{FIELD_SEPARATOR}20\n"
+            f"iCloud{FIELD_SEPARATOR}Sent Messages{FIELD_SEPARATOR}30{FIELD_SEPARATOR}0\n"
+            f"iCloud{FIELD_SEPARATOR}Archive{FIELD_SEPARATOR}20{FIELD_SEPARATOR}5"
         )
         args = mock_args(account="iCloud", all=True, json=False, mailbox=None)
 
@@ -30,6 +31,26 @@ class TestEnhancedStats:
         assert "INBOX: 100 messages, 20 unread" in captured.out
         assert "Sent Messages: 30 messages, 0 unread" in captured.out
         assert "Archive: 20 messages, 5 unread" in captured.out
+
+    @patch("my_cli.commands.mail.analytics.resolve_account", return_value=None)
+    @patch("my_cli.commands.mail.analytics.run")
+    def test_stats_all_no_account_shows_all_accounts(self, mock_run, mock_resolve, mock_args, capsys):
+        """Test that --all without -a aggregates across all configured accounts."""
+        # No account scoping — output includes multiple accounts
+        mock_run.return_value = (
+            f"250{FIELD_SEPARATOR}30\n"  # Grand totals
+            f"iCloud{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}100{FIELD_SEPARATOR}20\n"
+            f"Gmail{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}150{FIELD_SEPARATOR}10\n"
+        )
+        args = mock_args(account=None, all=True, json=False, mailbox=None)
+
+        cmd_stats(args)
+
+        captured = capsys.readouterr()
+        assert "All Accounts" in captured.out
+        assert "Total: 250 messages, 30 unread" in captured.out
+        assert "[iCloud] INBOX" in captured.out
+        assert "[Gmail] INBOX" in captured.out
 
     @patch("my_cli.commands.mail.analytics.run")
     def test_stats_without_all_flag_single_mailbox(self, mock_run, mock_args, capsys):
