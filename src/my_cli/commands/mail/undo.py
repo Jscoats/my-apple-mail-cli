@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from my_cli.config import (
     CONFIG_DIR,
@@ -16,18 +16,32 @@ from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import die, format_output
 
 MAX_UNDO_OPERATIONS = 10
+UNDO_MAX_AGE_HOURS = 24
+
+
+def _is_fresh(entry: dict) -> bool:
+    """Return True if the undo entry is younger than UNDO_MAX_AGE_HOURS."""
+    ts = entry.get("timestamp")
+    if not ts:
+        return False
+    try:
+        entry_time = datetime.fromisoformat(ts)
+        return datetime.now() - entry_time < timedelta(hours=UNDO_MAX_AGE_HOURS)
+    except (ValueError, TypeError):
+        return False
 
 
 def _load_undo_log() -> list[dict]:
-    """Load undo log from disk."""
+    """Load undo log from disk, filtering out entries older than UNDO_MAX_AGE_HOURS."""
     if not os.path.isfile(UNDO_LOG_FILE):
         return []
     with file_lock(UNDO_LOG_FILE):
         with open(UNDO_LOG_FILE) as f:
             try:
-                return json.load(f)
+                raw = json.load(f)
             except (json.JSONDecodeError, OSError):
                 return []
+    return [entry for entry in raw if _is_fresh(entry)]
 
 
 def _save_undo_log(operations: list[dict]) -> None:

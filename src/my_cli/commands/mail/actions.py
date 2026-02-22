@@ -278,6 +278,7 @@ def cmd_unsubscribe(args) -> None:
 
 def cmd_junk(args) -> None:
     """Mark a message as junk or spam."""
+    import sys
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
     message_id = validate_msg_id(args.id)
 
@@ -286,7 +287,20 @@ def cmd_junk(args) -> None:
         'junk mail status', 'true'
     )
 
-    subject = run(script)
+    # Run the AppleScript; if message not found, give a cross-account hint
+    try:
+        subject = run(script)
+    except SystemExit:
+        # run() already printed the error; add an actionable hint and re-exit
+        explicit_account = getattr(args, "account", None)
+        if not explicit_account:
+            print(
+                "Hint: If this message belongs to another account, use -a ACCOUNT.\n"
+                "      Run `my mail accounts` to see account names.",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+
     format_output(
         args,
         f"Message '{truncate(subject, 50)}' marked as junk.",
@@ -294,24 +308,17 @@ def cmd_junk(args) -> None:
     )
 
 
-def cmd_not_junk(args) -> None:
-    """Mark a message as not junk and move it back to INBOX."""
-    account = resolve_account(getattr(args, "account", None))
-    if not account:
-        die("Account required. Use -a ACCOUNT.")
-    message_id = validate_msg_id(args.id)
+def _try_not_junk_in_mailbox(acct_escaped: str, junk_escaped: str, inbox_escaped: str, message_id: int) -> str | None:
+    """Try to mark a message as not-junk from a specific mailbox.
 
-    acct_escaped = escape(account)
-    custom_mailbox = getattr(args, "mailbox", None)
-    if custom_mailbox:
-        junk_mailbox = resolve_mailbox(account, custom_mailbox)
-    else:
-        junk_mailbox = resolve_mailbox(account, "Junk")
-    inbox_mailbox = resolve_mailbox(account, "INBOX")
-    junk_escaped = escape(junk_mailbox)
-    inbox_escaped = escape(inbox_mailbox)
+    Uses subprocess directly so that individual mailbox attempts can fail silently
+    (returning None) without calling sys.exit. The module-level run() always exits
+    on error, which would prevent trying fallback mailboxes.
 
-    # Find the message in Junk mailbox and move back to INBOX
+    Returns the message subject string on success, None if the message or mailbox
+    was not found, or raises RuntimeError on unexpected AppleScript errors.
+    """
+    import subprocess as _subprocess
     script = f"""
     tell application "Mail"
         set acct to account "{acct_escaped}"
@@ -324,13 +331,78 @@ def cmd_not_junk(args) -> None:
         return msgSubject
     end tell
     """
-
-    subject = run(script)
-    format_output(
-        args,
-        f"Message '{truncate(subject, 50)}' marked as not junk and moved to INBOX.",
-        json_data={"id": message_id, "subject": subject, "status": "not_junk", "moved_to": "INBOX"}
+    result = _subprocess.run(
+        ["osascript", "-e", script],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
+    if result.returncode == 0:
+        return result.stdout.strip()
+    err_lower = result.stderr.strip().lower()
+    if "can't get message" in err_lower or "can't get mailbox" in err_lower:
+        return None
+    raise RuntimeError(result.stderr.strip())
+
+
+def cmd_not_junk(args) -> None:
+    """Mark a message as not junk and move it back to INBOX.
+
+    Searches the Junk mailbox (and Gmail [Gmail]/Spam for Gmail accounts) because
+    AppleScript message IDs become invalid in the original mailbox once a message
+    is moved to Junk. If a custom -m MAILBOX is given, only that mailbox is tried.
+    """
+    import sys
+    account = resolve_account(getattr(args, "account", None))
+    if not account:
+        die("Account required. Use -a ACCOUNT.")
+    message_id = validate_msg_id(args.id)
+
+    acct_escaped = escape(account)
+    inbox_mailbox = resolve_mailbox(account, "INBOX")
+    inbox_escaped = escape(inbox_mailbox)
+
+    custom_mailbox = getattr(args, "mailbox", None)
+    if custom_mailbox:
+        # User explicitly specified where to look — trust them, single attempt
+        candidates = [resolve_mailbox(account, custom_mailbox)]
+    else:
+        # Build a prioritized list of junk folder candidates
+        junk_primary = resolve_mailbox(account, "Junk")
+        candidates = [junk_primary]
+        from my_cli.config import get_gmail_accounts
+        if account in get_gmail_accounts():
+            if "[Gmail]/Spam" not in candidates:
+                candidates.append("[Gmail]/Spam")
+        else:
+            # For non-Gmail accounts also try "Spam" as an alias
+            if "Spam" not in candidates:
+                candidates.append("Spam")
+
+    # Try each candidate mailbox until the message is found
+    for junk_mailbox in candidates:
+        junk_escaped = escape(junk_mailbox)
+        try:
+            subject = _try_not_junk_in_mailbox(acct_escaped, junk_escaped, inbox_escaped, message_id)
+        except RuntimeError as exc:
+            print(f"Error: AppleScript error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        if subject is not None:
+            format_output(
+                args,
+                f"Message '{truncate(subject, 50)}' marked as not junk and moved to INBOX.",
+                json_data={"id": message_id, "subject": subject, "status": "not_junk", "moved_to": "INBOX"}
+            )
+            return
+
+    # All candidates failed — message not found in any junk folder
+    tried = ", ".join(f'"{m}"' for m in candidates)
+    print(
+        f"Error: Message {message_id} not found in junk folder(s) ({tried}).\n"
+        "The message may have already been moved, or use -m MAILBOX to specify its location.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 def cmd_open(args) -> None:

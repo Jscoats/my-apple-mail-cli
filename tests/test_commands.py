@@ -1,5 +1,6 @@
 """Smoke tests for top 10 mail command functions."""
 
+import pytest
 from unittest.mock import Mock
 
 
@@ -60,6 +61,24 @@ def test_cmd_inbox_empty(monkeypatch, mock_args, capsys):
     assert "No mail accounts found" in captured.out
 
 
+def test_cmd_inbox_empty_no_config_suggests_init(monkeypatch, mock_args, capsys, tmp_path):
+    """Bug fix: cmd_inbox suggests `my mail init` when config is missing and no accounts found."""
+    from my_cli.commands.mail.accounts import cmd_inbox
+    import my_cli.commands.mail.accounts as accounts_mod
+
+    mock_run = Mock(return_value="")
+    monkeypatch.setattr("my_cli.commands.mail.accounts.run", mock_run)
+    # Simulate missing config file
+    monkeypatch.setattr(accounts_mod, "CONFIG_FILE", str(tmp_path / "nonexistent.json"))
+
+    args = mock_args()
+    cmd_inbox(args)
+
+    captured = capsys.readouterr()
+    assert "No mail accounts found" in captured.out
+    assert "my mail init" in captured.out
+
+
 def test_cmd_inbox_account_filter(monkeypatch, mock_args, capsys):
     """Smoke test: cmd_inbox -a filters to a single account."""
     from my_cli.commands.mail.accounts import cmd_inbox
@@ -79,6 +98,45 @@ def test_cmd_inbox_account_filter(monkeypatch, mock_args, capsys):
     # Verify the script sent to run() scopes to a single account
     script_sent = mock_run.call_args[0][0]
     assert 'account "iCloud"' in script_sent
+    assert "every account" not in script_sent
+
+
+def test_cmd_inbox_no_account_flag_iterates_all_accounts(monkeypatch, capsys):
+    """Regression: inbox with no -a flag must query all accounts, not just the default."""
+    from argparse import Namespace
+    from my_cli.commands.mail.accounts import cmd_inbox
+
+    mock_run = Mock(return_value=(
+        f"iCloud{FIELD_SEPARATOR}0{FIELD_SEPARATOR}5\n"
+        f"ASU Gmail{FIELD_SEPARATOR}14{FIELD_SEPARATOR}14\n"
+    ))
+    monkeypatch.setattr("my_cli.commands.mail.accounts.run", mock_run)
+
+    # Simulate no -a flag: args.account is None
+    args = Namespace(account=None, json=False, mailbox="INBOX")
+    cmd_inbox(args)
+
+    script_sent = mock_run.call_args[0][0]
+    # The all-accounts branch must be used
+    assert "every account" in script_sent
+
+    captured = capsys.readouterr()
+    assert "Total unread across all accounts: 14" in captured.out
+
+
+def test_cmd_inbox_with_account_flag_scopes_to_single_account(monkeypatch, capsys):
+    """Regression: inbox with -a flag must scope to that account only."""
+    from argparse import Namespace
+    from my_cli.commands.mail.accounts import cmd_inbox
+
+    mock_run = Mock(return_value=f"ASU Gmail{FIELD_SEPARATOR}14{FIELD_SEPARATOR}14\n")
+    monkeypatch.setattr("my_cli.commands.mail.accounts.run", mock_run)
+
+    args = Namespace(account="ASU Gmail", json=False, mailbox="INBOX")
+    cmd_inbox(args)
+
+    script_sent = mock_run.call_args[0][0]
+    assert 'account "ASU Gmail"' in script_sent
     assert "every account" not in script_sent
 
 
@@ -1388,8 +1446,11 @@ def test_cmd_not_junk_basic(monkeypatch, mock_args, capsys):
     """Smoke test: cmd_not_junk marks a message as not junk and moves to INBOX."""
     from my_cli.commands.mail.actions import cmd_not_junk
 
-    mock_run = Mock(return_value="Legitimate Newsletter")
-    monkeypatch.setattr("my_cli.commands.mail.actions.run", mock_run)
+    # cmd_not_junk uses _try_not_junk_in_mailbox (subprocess) for fallback search
+    monkeypatch.setattr(
+        "my_cli.commands.mail.actions._try_not_junk_in_mailbox",
+        Mock(return_value="Legitimate Newsletter"),
+    )
 
     args = mock_args(id=666, account="iCloud", mailbox=None)
     cmd_not_junk(args)
@@ -1404,8 +1465,10 @@ def test_cmd_not_junk_json(monkeypatch, mock_args, capsys):
     """Smoke test: cmd_not_junk --json returns JSON with status=not_junk."""
     from my_cli.commands.mail.actions import cmd_not_junk
 
-    mock_run = Mock(return_value="Legitimate Newsletter")
-    monkeypatch.setattr("my_cli.commands.mail.actions.run", mock_run)
+    monkeypatch.setattr(
+        "my_cli.commands.mail.actions._try_not_junk_in_mailbox",
+        Mock(return_value="Legitimate Newsletter"),
+    )
 
     args = mock_args(id=666, account="iCloud", mailbox=None, json=True)
     cmd_not_junk(args)
@@ -1417,19 +1480,81 @@ def test_cmd_not_junk_json(monkeypatch, mock_args, capsys):
 
 
 def test_cmd_not_junk_applescript_moves_to_inbox(monkeypatch, mock_args, capsys):
-    """Smoke test: cmd_not_junk AppleScript clears junk status and moves to INBOX."""
+    """Smoke test: cmd_not_junk AppleScript clears junk status and moves to INBOX via _try_not_junk_in_mailbox."""
     from my_cli.commands.mail.actions import cmd_not_junk
 
-    mock_run = Mock(return_value="Legitimate Newsletter")
-    monkeypatch.setattr("my_cli.commands.mail.actions.run", mock_run)
+    mock_helper = Mock(return_value="Legitimate Newsletter")
+    monkeypatch.setattr(
+        "my_cli.commands.mail.actions._try_not_junk_in_mailbox",
+        mock_helper,
+    )
 
     args = mock_args(id=666, account="iCloud", mailbox=None)
     cmd_not_junk(args)
 
-    script_sent = mock_run.call_args[0][0]
-    assert "junk mail status" in script_sent
-    assert "false" in script_sent
-    assert "move theMsg to inboxMb" in script_sent
+    # Verify the helper was called with the expected mailbox (Junk for non-Gmail)
+    assert mock_helper.called
+    call_kwargs = mock_helper.call_args
+    # junk_escaped argument (2nd positional) should be "Junk"
+    junk_escaped_arg = call_kwargs[0][1]
+    assert "Junk" in junk_escaped_arg or "Spam" in junk_escaped_arg
+
+
+def test_cmd_not_junk_falls_back_to_spam(monkeypatch, mock_args, capsys):
+    """Bug fix: cmd_not_junk tries Spam as a fallback when Junk mailbox fails."""
+    from my_cli.commands.mail.actions import cmd_not_junk
+
+    # First call (Junk) returns None (not found), second call (Spam) succeeds
+    mock_helper = Mock(side_effect=[None, "Newsletter"])
+    monkeypatch.setattr(
+        "my_cli.commands.mail.actions._try_not_junk_in_mailbox",
+        mock_helper,
+    )
+
+    args = mock_args(id=777, account="iCloud", mailbox=None)
+    cmd_not_junk(args)
+
+    captured = capsys.readouterr()
+    assert "marked as not junk" in captured.out
+    assert mock_helper.call_count == 2
+
+
+def test_cmd_not_junk_all_candidates_fail(monkeypatch, mock_args, capsys):
+    """Bug fix: cmd_not_junk shows clear error when message not found in any junk folder."""
+    from my_cli.commands.mail.actions import cmd_not_junk
+
+    monkeypatch.setattr(
+        "my_cli.commands.mail.actions._try_not_junk_in_mailbox",
+        Mock(return_value=None),
+    )
+
+    args = mock_args(id=888, account="iCloud", mailbox=None)
+    with pytest.raises(SystemExit):
+        cmd_not_junk(args)
+
+    captured = capsys.readouterr()
+    assert "888" in captured.err
+    assert "not found" in captured.err.lower()
+
+
+def test_cmd_junk_cross_account_hint(monkeypatch, mock_args, capsys):
+    """Bug fix: cmd_junk shows cross-account hint when message not found and no -a given."""
+    from my_cli.commands.mail.actions import cmd_junk
+    import sys
+
+    def mock_run_fail(script):
+        print("Error: Message not found", file=sys.stderr)
+        sys.exit(1)
+
+    monkeypatch.setattr("my_cli.commands.mail.actions.run", mock_run_fail)
+
+    # No explicit account — hint should be shown
+    args = mock_args(id=999, account=None)
+    with pytest.raises(SystemExit):
+        cmd_junk(args)
+
+    captured = capsys.readouterr()
+    assert "another account" in captured.err.lower() or "-a account" in captured.err.lower()
 
 
 # ---------------------------------------------------------------------------

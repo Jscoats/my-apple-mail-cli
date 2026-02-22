@@ -1,6 +1,8 @@
 """Account and mailbox listing commands: inbox, accounts, mailboxes."""
 
-from my_cli.config import resolve_account, FIELD_SEPARATOR
+import os
+
+from my_cli.config import CONFIG_FILE, resolve_account, FIELD_SEPARATOR
 from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import truncate, format_output
 
@@ -11,7 +13,10 @@ from my_cli.util.formatting import truncate, format_output
 
 def cmd_inbox(args) -> None:
     """List unread counts and recent messages, optionally scoped to one account."""
-    account = resolve_account(getattr(args, "account", None))
+    # Use only the explicitly-passed -a flag, not the config default.
+    # resolve_account() would return the default account (e.g. iCloud) when no
+    # flag is given, causing inbox to show only one account instead of all.
+    account = getattr(args, "account", None)
 
     if account:
         acct_escaped = escape(account)
@@ -80,7 +85,14 @@ def cmd_inbox(args) -> None:
     result = run(script)
 
     if not result.strip():
-        format_output(args, "No mail accounts found or no INBOX mailboxes available.")
+        if not os.path.isfile(CONFIG_FILE):
+            format_output(
+                args,
+                "No mail accounts found or no INBOX mailboxes available.\n"
+                "Run `my mail init` to configure your default account.",
+            )
+        else:
+            format_output(args, "No mail accounts found or no INBOX mailboxes available.")
         return
 
     # Parse once into structured data

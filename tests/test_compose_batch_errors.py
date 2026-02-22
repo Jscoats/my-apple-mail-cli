@@ -307,6 +307,25 @@ class TestDraftHappyPath:
         assert "Mail.app" in out
         assert "manually click Send" in out
 
+    def test_draft_applescript_uses_safe_email_address_lookup(self, monkeypatch):
+        """Regression: draft AppleScript must handle email addresses as list or string (-1700 fix)."""
+        from my_cli.commands.mail.compose import cmd_draft
+
+        monkeypatch.setattr("my_cli.commands.mail.compose.resolve_account", lambda _: "iCloud")
+        mock_run = Mock(return_value="draft created")
+        monkeypatch.setattr("my_cli.commands.mail.compose.run", mock_run)
+
+        args = _make_args(to="r@example.com", subject="S", body="B",
+                          template=None, cc=None, bcc=None)
+        cmd_draft(args)
+
+        script_sent = mock_run.call_args[0][0]
+        # The fixed script must use the safe pattern, not bare item 1 of (...)
+        assert "get (email addresses of account" in script_sent
+        assert "class of emailAddrs is list" in script_sent
+        # The old crashy pattern must not appear
+        assert "item 1 of (email addresses of account" not in script_sent
+
 
 # ---------------------------------------------------------------------------
 # batch.py: cmd_batch_read

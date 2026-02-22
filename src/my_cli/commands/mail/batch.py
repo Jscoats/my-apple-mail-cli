@@ -25,6 +25,7 @@ def cmd_batch_read(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
+    limit = getattr(args, "limit", None) or 25
 
     acct_escaped = escape(account)
     mb_escaped = escape(mailbox)
@@ -34,7 +35,7 @@ def cmd_batch_read(args) -> None:
         set mb to mailbox "{mb_escaped}" of account "{acct_escaped}"
         set unreadMsgs to (every message of mb whose read status is false)
         set ct to count of unreadMsgs
-        set cap to 1000
+        set cap to {limit}
         if ct < cap then set cap to ct
         repeat with i from 1 to cap
             set m to item i of unreadMsgs
@@ -46,9 +47,9 @@ def cmd_batch_read(args) -> None:
 
     result = run(script)
     count = int(result) if result.isdigit() else 0
-    format_output(args, f"Marked {count} messages as read in {mailbox} [{account}].",
-                  json_data={"mailbox": mailbox, "account": account, "marked_read": count})
-    print("Note: This operation cannot be undone via 'my mail undo'.", file=sys.stderr)
+    format_output(args, f"Marked {count} messages as read in {mailbox} [{account}] (limit: {limit}).",
+                  json_data={"mailbox": mailbox, "account": account, "marked_read": count, "limit": limit})
+    print("WARNING: This operation cannot be undone via 'my mail undo'. Use --limit to cap scope.", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +64,7 @@ def cmd_batch_flag(args) -> None:
     sender = getattr(args, "from_sender", None)
     if not sender:
         die("--from-sender is required.")
+    limit = getattr(args, "limit", None) or 25
 
     acct_escaped = escape(account)
     sender_escaped = escape(sender)
@@ -71,8 +73,10 @@ def cmd_batch_flag(args) -> None:
     tell application "Mail"
         set output to 0
         repeat with mbox in (mailboxes of account "{acct_escaped}")
+            if output >= {limit} then exit repeat
             set msgs to (every message of mbox whose sender contains "{sender_escaped}")
             repeat with m in msgs
+                if output >= {limit} then exit repeat
                 set flagged status of m to true
                 set output to output + 1
             end repeat
@@ -83,9 +87,9 @@ def cmd_batch_flag(args) -> None:
 
     result = run(script)
     count = int(result) if result.isdigit() else 0
-    format_output(args, f"Flagged {count} messages from '{sender}' in account '{account}'.",
-                  json_data={"sender": sender, "account": account, "flagged": count})
-    print("Note: This operation cannot be undone via 'my mail undo'.", file=sys.stderr)
+    format_output(args, f"Flagged {count} messages from '{sender}' in account '{account}' (limit: {limit}).",
+                  json_data={"sender": sender, "account": account, "flagged": count, "limit": limit})
+    print("WARNING: This operation cannot be undone via 'my mail undo'. Use --limit to cap scope.", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -362,15 +366,17 @@ def cmd_batch_delete(args) -> None:
 
 def register(subparsers) -> None:
     """Register batch mail subcommands."""
-    p = subparsers.add_parser("batch-read", help="Mark all messages as read in a mailbox")
+    p = subparsers.add_parser("batch-read", help="Mark messages as read in a mailbox")
     p.add_argument("-a", "--account", help="Mail account name")
     p.add_argument("-m", "--mailbox", help="Mailbox name (default: INBOX)")
+    p.add_argument("--limit", type=int, default=25, help="Maximum number of messages to mark read (default: 25)")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_batch_read)
 
-    p = subparsers.add_parser("batch-flag", help="Flag all messages from a sender")
+    p = subparsers.add_parser("batch-flag", help="Flag messages from a sender")
     p.add_argument("--from-sender", required=True, help="Sender email to match")
     p.add_argument("-a", "--account", help="Mail account name")
+    p.add_argument("--limit", type=int, default=25, help="Maximum number of messages to flag (default: 25)")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_batch_flag)
 
