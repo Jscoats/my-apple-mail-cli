@@ -123,7 +123,7 @@ my mail to-todoist 123 --project Work
 
 ## 🔧 Requirements
 
-- **macOS** (uses AppleScript to communicate with Mail.app)
+- **macOS 12 or later** (uses AppleScript to communicate with Mail.app)
 - **Python 3.10+**
 - **Mail.app** with at least one configured account
 - **Permissions:** First run will prompt for Mail.app automation permission in System Settings
