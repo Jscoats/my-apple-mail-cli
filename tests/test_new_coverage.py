@@ -334,7 +334,7 @@ class TestTodoistIntegration:
 
         out = capsys.readouterr().out
         assert "Important Meeting" in out
-        assert "todoist.com" in out
+        assert "https://todoist.com/tasks/task_abc123" in out
         # Only one urlopen call (no project lookup)
         assert mock_urlopen.call_count == 1
 
