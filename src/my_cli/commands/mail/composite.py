@@ -8,7 +8,9 @@ from my_cli.config import (
     APPLESCRIPT_TIMEOUT_BATCH,
     APPLESCRIPT_TIMEOUT_LONG,
     DEFAULT_MAILBOX,
+    FIELD_SEPARATOR,
     MAX_EXPORT_BULK_LIMIT,
+    RECORD_SEPARATOR,
     resolve_account,
 )
 from my_cli.util.applescript import escape, run
@@ -55,12 +57,12 @@ def _export_single(args, msg_id: int, account: str, mailbox: str, dest: str) -> 
             set toList to toList & (address of r) & ", "
         end repeat
 
-        return msgSubject & "\x1F" & msgSender & "\x1F" & msgDate & "\x1F" & toList & "\x1F" & msgContent
+        return msgSubject & "{FIELD_SEPARATOR}" & msgSender & "{FIELD_SEPARATOR}" & msgDate & "{FIELD_SEPARATOR}" & toList & "{FIELD_SEPARATOR}" & msgContent
     end tell
     """
 
     result = run(script)
-    parts = result.split("\x1F")
+    parts = result.split(FIELD_SEPARATOR)
     if len(parts) < 5:
         die("Failed to read message.")
 
@@ -110,7 +112,7 @@ def _export_bulk(args, mailbox: str, account: str, dest: str, after: str | None)
         set output to ""
         repeat with i from 1 to cap
             set m to item i of msgs
-            set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & "\x1F" & (content of m) & "\x1FEND\x1F" & linefeed
+            set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (content of m) & "{RECORD_SEPARATOR}" & linefeed
         end repeat
         return output
     end tell
@@ -120,16 +122,16 @@ def _export_bulk(args, mailbox: str, account: str, dest: str, after: str | None)
     dest_dir = os.path.expanduser(dest)
     os.makedirs(dest_dir, exist_ok=True)
 
-    entries = result.split("\x1FEND\x1F")
+    entries = result.split(RECORD_SEPARATOR)
     exported = 0
     for entry in entries:
         entry = entry.strip()
         if not entry:
             continue
-        parts = entry.split("\x1F")
+        parts = entry.split(FIELD_SEPARATOR)
         if len(parts) < 5:
             continue
-        msg_id, subject, sender, date, content = parts[0], parts[1], parts[2], parts[3], "\x1F".join(parts[4:])
+        msg_id, subject, sender, date, content = parts[0], parts[1], parts[2], parts[3], FIELD_SEPARATOR.join(parts[4:])
 
         safe_subject = re.sub(r'[^\w\s-]', '', subject).strip().replace(' ', '-')[:50]
         filename = f"{safe_subject}-{msg_id}.md" if safe_subject else f"message-{msg_id}.md"
@@ -193,7 +195,7 @@ def cmd_thread(args) -> None:
                 set msgs to (every message of mbox whose subject contains "{thread_escaped}")
                 repeat with m in msgs
                     if totalFound >= {limit} then exit repeat
-                    set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & "\x1F" & mbName & "\x1F" & acctName & linefeed
+                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & mbName & "{FIELD_SEPARATOR}" & acctName & linefeed
                     set totalFound to totalFound + 1
                 end repeat
             end repeat
@@ -212,7 +214,7 @@ def cmd_thread(args) -> None:
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split("\x1F")
+        parts = line.split(FIELD_SEPARATOR)
         if len(parts) >= 6:
             messages.append({
                 "id": int(parts[0]) if parts[0].isdigit() else parts[0],
@@ -255,16 +257,16 @@ def cmd_reply(args) -> None:
         set msgSender to sender of theMsg
         set msgDate to date received of theMsg
         set msgContent to content of theMsg
-        return msgSubject & "\x1F" & msgSender & "\x1F" & msgDate & "\x1F" & msgContent
+        return msgSubject & "{FIELD_SEPARATOR}" & msgSender & "{FIELD_SEPARATOR}" & msgDate & "{FIELD_SEPARATOR}" & msgContent
     end tell
     """
 
     result = run(script)
-    parts = result.split("\x1F")
+    parts = result.split(FIELD_SEPARATOR)
     if len(parts) < 4:
         die("Failed to read original message.")
 
-    orig_subject, orig_sender, orig_date, orig_content = parts[0], parts[1], parts[2], "\x1F".join(parts[3:])
+    orig_subject, orig_sender, orig_date, orig_content = parts[0], parts[1], parts[2], FIELD_SEPARATOR.join(parts[3:])
 
     reply_subject = orig_subject if orig_subject.lower().startswith("re:") else f"Re: {orig_subject}"
     # Extract email from sender
@@ -320,16 +322,16 @@ def cmd_forward(args) -> None:
         set msgSender to sender of theMsg
         set msgDate to date received of theMsg
         set msgContent to content of theMsg
-        return msgSubject & "\x1F" & msgSender & "\x1F" & msgDate & "\x1F" & msgContent
+        return msgSubject & "{FIELD_SEPARATOR}" & msgSender & "{FIELD_SEPARATOR}" & msgDate & "{FIELD_SEPARATOR}" & msgContent
     end tell
     """
 
     result = run(script)
-    parts = result.split("\x1F")
+    parts = result.split(FIELD_SEPARATOR)
     if len(parts) < 4:
         die("Failed to read original message.")
 
-    orig_subject, orig_sender, orig_date, orig_content = parts[0], parts[1], parts[2], "\x1F".join(parts[3:])
+    orig_subject, orig_sender, orig_date, orig_content = parts[0], parts[1], parts[2], FIELD_SEPARATOR.join(parts[3:])
 
     fwd_subject = f"Fwd: {orig_subject}" if not orig_subject.lower().startswith("fwd:") else orig_subject
     fwd_body = f"---------- Forwarded message ----------\nFrom: {orig_sender}\nDate: {orig_date}\nSubject: {orig_subject}\n\n{orig_content}"

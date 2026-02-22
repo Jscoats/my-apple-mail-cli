@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from typing import NoReturn
 
 
 def truncate(s: str, max_length: int) -> str:
@@ -11,20 +12,6 @@ def truncate(s: str, max_length: int) -> str:
     if not s or len(s) <= max_length:
         return s or ""
     return s[: max_length - 3] + "..."
-
-
-def _convert_dates(obj: object) -> object:
-    """Recursively convert AppleScript dates to ISO 8601 in dicts/lists."""
-    if isinstance(obj, dict):
-        return {k: _convert_dates(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_convert_dates(item) for item in obj]
-    elif isinstance(obj, str):
-        # Only convert if this looks like it might be a date field
-        # (This is a heuristic - we don't have the key context here)
-        return obj
-    else:
-        return obj
 
 
 def _convert_dates_with_keys(obj: object, key: str | None = None) -> object:
@@ -59,7 +46,7 @@ def format_output(args: object, text: str, *, json_data: object = None) -> None:
     output(text, json_data=json_data, use_json=use_json)
 
 
-def die(msg: str, code: int = 1) -> None:
+def die(msg: str, code: int = 1) -> NoReturn:
     """Print error and exit."""
     print(f"Error: {msg}", file=sys.stderr)
-    sys.exit(code)  # type: ignore[unreachable]
+    sys.exit(code)

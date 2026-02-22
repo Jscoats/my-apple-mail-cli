@@ -3,25 +3,28 @@
 import json
 import os
 
-from my_cli.config import CONFIG_DIR
+from my_cli.config import CONFIG_DIR, TEMPLATES_FILE, _file_lock
 from my_cli.util.formatting import format_output, die
-
-TEMPLATES_FILE = os.path.join(CONFIG_DIR, "mail-templates.json")
 
 
 def _load_templates() -> dict:
     """Load templates from disk."""
     if os.path.isfile(TEMPLATES_FILE):
-        with open(TEMPLATES_FILE) as f:
-            return json.load(f)
+        with _file_lock(TEMPLATES_FILE):
+            with open(TEMPLATES_FILE) as f:
+                try:
+                    return json.load(f)
+                except (json.JSONDecodeError, OSError):
+                    return {}
     return {}
 
 
 def _save_templates(templates: dict) -> None:
     """Save templates to disk."""
     os.makedirs(CONFIG_DIR, exist_ok=True)
-    with open(TEMPLATES_FILE, "w") as f:
-        json.dump(templates, f, indent=2)
+    with _file_lock(TEMPLATES_FILE):
+        with open(TEMPLATES_FILE, "w") as f:
+            json.dump(templates, f, indent=2)
 
 
 def cmd_templates_list(args) -> None:

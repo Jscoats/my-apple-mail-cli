@@ -7,13 +7,14 @@ from my_cli.config import (
     DEFAULT_MAILBOX,
     APPLESCRIPT_TIMEOUT_LONG,
     FIELD_SEPARATOR,
+    NOREPLY_PATTERNS,
     RECORD_SEPARATOR,
     resolve_account,
 )
 from my_cli.util.applescript import escape, run
 from my_cli.util.applescript_templates import inbox_iterator_all_accounts
 from my_cli.util.formatting import die, format_output, truncate
-from my_cli.util.mail_helpers import normalize_subject
+from my_cli.util.mail_helpers import extract_email, normalize_subject
 
 
 # ---------------------------------------------------------------------------
@@ -75,8 +76,6 @@ def cmd_triage(args) -> None:
     notifications = []
 
     # Simple heuristic categorization
-    noreply_patterns = ["noreply", "no-reply", "notifications", "mailer-daemon", "donotreply", "updates@", "news@", "info@", "support@", "billing@"]
-
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
@@ -94,7 +93,7 @@ def cmd_triage(args) -> None:
 
         if msg["flagged"]:
             flagged.append(msg)
-        elif any(p in msg["sender"].lower() for p in noreply_patterns):
+        elif any(p in extract_email(msg["sender"]).lower() for p in NOREPLY_PATTERNS):
             notifications.append(msg)
         else:
             people.append(msg)
@@ -155,7 +154,7 @@ def cmd_context(args) -> None:
             set toList to toList & (address of r) & ", "
         end repeat
 
-        return msgSubject & "\x1F" & msgSender & "\x1F" & msgDate & "\x1F" & toList & "\x1F" & msgContent
+        return msgSubject & "{FIELD_SEPARATOR}" & msgSender & "{FIELD_SEPARATOR}" & msgDate & "{FIELD_SEPARATOR}" & toList & "{FIELD_SEPARATOR}" & msgContent
     end tell
     """
 
@@ -190,7 +189,7 @@ def cmd_context(args) -> None:
                     repeat with m in msgs
                         if totalFound >= {limit} then exit repeat
                         if (id of m) is not {message_id} then
-                            set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & "\x1F" & (content of m) & "\x1FEND\x1F"
+                            set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (content of m) & "{RECORD_SEPARATOR}"
                             set totalFound to totalFound + 1
                         end if
                     end repeat
@@ -258,7 +257,7 @@ def cmd_find_related(args) -> None:
                 repeat with mbox in (mailboxes of acct)
                     try
                         set theMsg to first message of mbox whose id is {message_id}
-                        return (subject of theMsg) & "\x1F" & (sender of theMsg)
+                        return (subject of theMsg) & "{FIELD_SEPARATOR}" & (sender of theMsg)
                     end try
                 end repeat
             end repeat
@@ -287,7 +286,7 @@ def cmd_find_related(args) -> None:
                 set searchResults to (every message of mbox whose subject contains "{query_escaped}")
                 repeat with m in searchResults
                     if totalFound >= {DEFAULT_DIGEST_LIMIT} then exit repeat
-                    set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & "\x1F" & mbName & "\x1F" & acctName & linefeed
+                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & mbName & "{FIELD_SEPARATOR}" & acctName & linefeed
                     set totalFound to totalFound + 1
                 end repeat
             end repeat

@@ -122,8 +122,6 @@ def cmd_rules(args) -> None:
     """List or manage mail rules."""
     action = getattr(args, "action", None)
     rule_name = getattr(args, "rule_name", None)
-    _mailbox = getattr(args, "mailbox", None)  # noqa: F841
-
     if action == "enable" and rule_name:
         _toggle_rule(args, rule_name, True)
     elif action == "disable" and rule_name:
@@ -133,7 +131,7 @@ def cmd_rules(args) -> None:
 
 
 def _list_rules(args) -> None:
-    script = """
+    script = f"""
     tell application "Mail"
         set output to ""
         repeat with r in (every rule)

@@ -3,11 +3,9 @@
 import json
 import os
 
-from my_cli.config import resolve_account, CONFIG_DIR
+from my_cli.config import resolve_account, TEMPLATES_FILE, _file_lock
 from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import die, format_output
-
-TEMPLATES_FILE = os.path.join(CONFIG_DIR, "mail-templates.json")
 
 
 def cmd_draft(args) -> None:
@@ -26,15 +24,19 @@ def cmd_draft(args) -> None:
     template_name = getattr(args, "template", None)
     if template_name:
         if os.path.isfile(TEMPLATES_FILE):
-            with open(TEMPLATES_FILE) as f:
-                templates = json.load(f)
+            with _file_lock(TEMPLATES_FILE):
+                with open(TEMPLATES_FILE) as f:
+                    try:
+                        templates = json.load(f)
+                    except (json.JSONDecodeError, OSError):
+                        die("Templates file is corrupt. Run 'my mail templates list' to diagnose.")
             if template_name not in templates:
                 die(f"Template '{template_name}' not found. Use 'my mail templates list' to see available templates.")
             template = templates[template_name]
             # Apply template, allowing flag overrides
-            if not subject or subject == "":
+            if not subject:
                 subject = template.get("subject", "")
-            if not body or body == "":
+            if not body:
                 body = template.get("body", "")
         else:
             die("No templates file found. Create templates with 'my mail templates create'.")

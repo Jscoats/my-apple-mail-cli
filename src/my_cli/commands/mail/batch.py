@@ -130,8 +130,9 @@ def cmd_batch_move(args) -> None:
         return
 
     if dry_run:
-        format_output(args, f"Dry run: Would move {total_count} messages from '{sender}' to '{dest_mailbox}'.",
-                      json_data={"sender": sender, "to_mailbox": dest_mailbox, "account": account, "would_move": total_count, "dry_run": True})
+        effective_count = min(total_count, limit) if limit else total_count
+        format_output(args, f"Dry run: Would move {effective_count} messages from '{sender}' to '{dest_mailbox}'.",
+                      json_data={"sender": sender, "to_mailbox": dest_mailbox, "account": account, "would_move": effective_count, "total_matching": total_count, "dry_run": True})
         return
 
     # Actually move the messages and collect their IDs for undo logging
@@ -143,14 +144,17 @@ def cmd_batch_move(args) -> None:
         set moveCount to 0
         set movedIds to {{}}
         repeat with mbox in (mailboxes of account "{acct_escaped}")
+            {limit_clause}
             set sourceMbName to name of mbox
             set msgs to (every message of mbox whose sender contains "{sender_escaped}")
             repeat with m in msgs
                 {limit_clause}
-                set msgId to id of m
-                set end of movedIds to msgId
-                move m to destMb
-                set moveCount to moveCount + 1
+                try
+                    set msgId to id of m
+                    move m to destMb
+                    set end of movedIds to msgId
+                    set moveCount to moveCount + 1
+                end try
             end repeat
         end repeat
         set output to (moveCount as text)
@@ -264,9 +268,10 @@ def cmd_batch_delete(args) -> None:
         return
 
     if dry_run:
-        format_output(args, f"Dry run: Would delete {total_count} messages {filter_desc} from {scope_desc}.",
+        effective_count = min(total_count, limit) if limit else total_count
+        format_output(args, f"Dry run: Would delete {effective_count} messages {filter_desc} from {scope_desc}.",
                       json_data={"account": account, "mailbox": mailbox, "sender": sender,
-                                 "older_than_days": older_than_days, "would_delete": total_count, "dry_run": True})
+                                 "older_than_days": older_than_days, "would_delete": effective_count, "total_matching": total_count, "dry_run": True})
         return
 
     if not force:
@@ -288,8 +293,9 @@ def cmd_batch_delete(args) -> None:
             repeat with m in targetMsgs
                 {limit_check}
                 try
-                    set end of deletedIds to (id of m)
+                    set msgId to id of m
                     delete m
+                    set end of deletedIds to msgId
                     set deleteCount to deleteCount + 1
                 end try
             end repeat
@@ -311,8 +317,9 @@ def cmd_batch_delete(args) -> None:
                 repeat with m in targetMsgs
                     {limit_check}
                     try
-                        set end of deletedIds to (id of m)
+                        set msgId to id of m
                         delete m
+                        set end of deletedIds to msgId
                         set deleteCount to deleteCount + 1
                     end try
                 end repeat

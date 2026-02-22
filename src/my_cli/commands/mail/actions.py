@@ -10,7 +10,7 @@ from my_cli.config import APPLESCRIPT_TIMEOUT_SHORT, FIELD_SEPARATOR, resolve_ac
 from my_cli.util.applescript import escape, run
 from my_cli.util.applescript_templates import set_message_property
 from my_cli.util.formatting import die, format_output, truncate
-from my_cli.util.mail_helpers import resolve_message_context, parse_email_headers
+from my_cli.util.mail_helpers import resolve_mailbox, resolve_message_context, parse_email_headers
 
 
 def _mark_read_status(args, read_status: bool) -> None:
@@ -77,6 +77,8 @@ def cmd_move(args) -> None:
     message_id = args.id
 
     acct_escaped = escape(account)
+    source = resolve_mailbox(account, source)
+    dest = resolve_mailbox(account, dest)
     src_escaped = escape(source)
     dest_escaped = escape(dest)
 
@@ -271,13 +273,17 @@ def cmd_not_junk(args) -> None:
     message_id = args.id
 
     acct_escaped = escape(account)
+    junk_mailbox = resolve_mailbox(account, "Junk")
+    inbox_mailbox = resolve_mailbox(account, "INBOX")
+    junk_escaped = escape(junk_mailbox)
+    inbox_escaped = escape(inbox_mailbox)
 
     # Find the message in Junk mailbox and move back to INBOX
     script = f"""
     tell application "Mail"
         set acct to account "{acct_escaped}"
-        set junkMb to mailbox "Junk" of acct
-        set inboxMb to mailbox "INBOX" of acct
+        set junkMb to mailbox "{junk_escaped}" of acct
+        set inboxMb to mailbox "{inbox_escaped}" of acct
         set theMsg to first message of junkMb whose id is {message_id}
         set msgSubject to subject of theMsg
         set junk mail status of theMsg to false

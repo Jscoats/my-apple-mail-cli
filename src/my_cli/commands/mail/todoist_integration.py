@@ -40,7 +40,7 @@ def cmd_to_todoist(args) -> None:
         set msgSubject to subject of theMsg
         set msgSender to sender of theMsg
         set msgDate to date received of theMsg
-        return msgSubject & "\x1F" & msgSender & "\x1F" & (msgDate as text)
+        return msgSubject & "{FIELD_SEPARATOR}" & msgSender & "{FIELD_SEPARATOR}" & (msgDate as text)
     end tell
     """
 
@@ -81,7 +81,6 @@ def cmd_to_todoist(args) -> None:
     try:
         with urllib.request.urlopen(req, context=ssl_context) as response:
             response_data = json.loads(response.read().decode("utf-8"))
-            _task_id = response_data.get("id")  # noqa: F841
             task_url = response_data.get("url")
 
             text = f"Created Todoist task: {subject}"

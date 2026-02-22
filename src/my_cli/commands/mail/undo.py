@@ -9,6 +9,7 @@ from datetime import datetime
 from my_cli.config import (
     CONFIG_DIR,
     APPLESCRIPT_TIMEOUT_LONG,
+    _file_lock,
 )
 from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import die, format_output
@@ -21,8 +22,12 @@ def _load_undo_log() -> list[dict]:
     """Load undo log from disk."""
     if not os.path.isfile(UNDO_LOG_FILE):
         return []
-    with open(UNDO_LOG_FILE) as f:
-        return json.load(f)
+    with _file_lock(UNDO_LOG_FILE):
+        with open(UNDO_LOG_FILE) as f:
+            try:
+                return json.load(f)
+            except (json.JSONDecodeError, OSError):
+                return []
 
 
 def _save_undo_log(operations: list[dict]) -> None:
@@ -30,8 +35,9 @@ def _save_undo_log(operations: list[dict]) -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
     # Keep only the most recent operations
     trimmed = operations[-MAX_UNDO_OPERATIONS:]
-    with open(UNDO_LOG_FILE, "w") as f:
-        json.dump(trimmed, f, indent=2)
+    with _file_lock(UNDO_LOG_FILE):
+        with open(UNDO_LOG_FILE, "w") as f:
+            json.dump(trimmed, f, indent=2)
 
 
 def log_batch_operation(

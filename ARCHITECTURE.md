@@ -86,3 +86,5 @@ Batch commands (`batch-read`, `batch-move`, `batch-delete`, `batch-flag`) log th
 ## Testing
 
 Tests live in `tests/` and use `unittest.mock` to mock AppleScript calls. No actual Mail.app interaction happens during testing. Run with `pytest`.
+
+The suite has 196 tests across 17 test files covering command parsing, AppleScript output parsing, error paths, date handling, formatting, config resolution, batch operations, undo logging, templates, and AI classification logic.

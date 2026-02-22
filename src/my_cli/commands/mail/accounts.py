@@ -32,7 +32,7 @@ def cmd_inbox(args) -> None:
                             if (count of unreadMsgs) < previewCount then set previewCount to count of unreadMsgs
                             repeat with j from 1 to previewCount
                                 set m to item j of unreadMsgs
-                                set output to output & "MSG\x1F" & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
+                                set output to output & "MSG" & "{FIELD_SEPARATOR}" & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
                             end repeat
                         end if
                     end try
@@ -64,7 +64,7 @@ def cmd_inbox(args) -> None:
                                     if (count of unreadMsgs) < previewCount then set previewCount to count of unreadMsgs
                                     repeat with j from 1 to previewCount
                                         set m to item j of unreadMsgs
-                                        set output to output & "MSG\x1F" & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
+                                        set output to output & "MSG" & "{FIELD_SEPARATOR}" & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
                                     end repeat
                                 end if
                             end try
@@ -83,7 +83,7 @@ def cmd_inbox(args) -> None:
         format_output(args, "No mail accounts found or no INBOX mailboxes available.")
         return
 
-    # Build JSON data
+    # Parse once into structured data
     accounts = []
     current = None
     for line in result.strip().split("\n"):
@@ -109,31 +109,18 @@ def cmd_inbox(args) -> None:
             }
             accounts.append(current)
 
-    # Build text output
+    # Build text from parsed data
     text = "Inbox Summary\n" + "=" * 50
-    current_account = None
     total_unread = 0
-
-    for line in result.strip().split("\n"):
-        if not line.strip():
-            continue
-        parts = line.split(FIELD_SEPARATOR)
-        if parts[0] == "MSG" and len(parts) >= 6:
-            _, acct, msg_id, subject, sender, date = parts[:6]
-            text += f"\n    [{msg_id}] {truncate(subject, 45)}"
-            text += f"\n      From: {sender}"
-        elif len(parts) >= 3:
-            acct, unread, total = parts[:3]
-            unread_int = int(unread) if unread.isdigit() else 0
-            total_int = int(total) if total.isdigit() else 0
-            total_unread += unread_int
-            if current_account != acct:
-                text += f"\n\n{acct}:"
-                text += f"\n  Unread: {unread_int} / Total: {total_int}"
-                if unread_int > 0:
-                    text += "\n  Recent unread:"
-                current_account = acct
-
+    for acct_data in accounts:
+        total_unread += acct_data["unread"]
+        text += f"\n\n{acct_data['account']}:"
+        text += f"\n  Unread: {acct_data['unread']} / Total: {acct_data['total']}"
+        if acct_data["unread"] > 0:
+            text += "\n  Recent unread:"
+            for msg in acct_data["recent_unread"]:
+                text += f"\n    [{msg['id']}] {truncate(msg['subject'], 45)}"
+                text += f"\n      From: {msg['sender']}"
     text += f"\n\n{'=' * 50}"
     text += f"\nTotal unread across all accounts: {total_unread}"
     format_output(args, text, json_data=accounts)
@@ -165,7 +152,7 @@ def cmd_accounts(args) -> None:
         format_output(args, "No mail accounts found.")
         return
 
-    # Build JSON data
+    # Parse once into structured data
     accounts = []
     for line in result.strip().split("\n"):
         if not line.strip():
@@ -179,16 +166,11 @@ def cmd_accounts(args) -> None:
                 "enabled": parts[3].lower() == "true",
             })
 
-    # Build text output
+    # Build text from parsed data
     text = "Mail Accounts:"
-    for line in result.strip().split("\n"):
-        if not line.strip():
-            continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 4:
-            name, full_name, email, enabled = parts[:4]
-            status = "enabled" if enabled.lower() == "true" else "disabled"
-            text += f"\n- {name}\n  Email: {email}\n  Name: {full_name}\n  Status: {status}"
+    for acct in accounts:
+        status = "enabled" if acct["enabled"] else "disabled"
+        text += f"\n- {acct['name']}\n  Email: {acct['email']}\n  Name: {acct['full_name']}\n  Status: {status}"
     format_output(args, text, json_data=accounts)
 
 
@@ -215,7 +197,7 @@ def cmd_mailboxes(args) -> None:
         end tell
         """
     else:
-        script = """
+        script = f"""
         tell application "Mail"
             set output to ""
             repeat with acct in (every account)
@@ -237,7 +219,7 @@ def cmd_mailboxes(args) -> None:
         format_output(args, msg)
         return
 
-    # Build JSON data
+    # Parse once into structured data
     mailboxes = []
     for line in result.strip().split("\n"):
         if not line.strip():
@@ -252,23 +234,15 @@ def cmd_mailboxes(args) -> None:
                 "unread": int(parts[2]) if parts[2].isdigit() else 0,
             })
 
-    # Build text output
+    # Build text from parsed data
     header = f"Mailboxes in {account}:" if account else "All Mailboxes:"
     text = header
-    for line in result.strip().split("\n"):
-        if not line.strip():
-            continue
-        parts = line.split(FIELD_SEPARATOR)
-        if account and len(parts) >= 2:
-            name, unread = parts[:2]
-            unread_int = int(unread) if unread.isdigit() else 0
-            unread_str = f" ({unread_int} unread)" if unread_int > 0 else ""
-            text += f"\n- {name}{unread_str}"
-        elif not account and len(parts) >= 3:
-            acct, name, unread = parts[:3]
-            unread_int = int(unread) if unread.isdigit() else 0
-            unread_str = f" ({unread_int} unread)" if unread_int > 0 else ""
-            text += f"\n- {name}{unread_str} [{acct}]"
+    for mb in mailboxes:
+        unread_str = f" ({mb['unread']} unread)" if mb["unread"] > 0 else ""
+        if account:
+            text += f"\n- {mb['name']}{unread_str}"
+        else:
+            text += f"\n- {mb['name']}{unread_str} [{mb['account']}]"
     format_output(args, text, json_data=mailboxes)
 
 

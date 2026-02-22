@@ -4,7 +4,7 @@ from argparse import Namespace
 
 import pytest
 
-from my_cli.config import validate_limit
+from my_cli.config import FIELD_SEPARATOR, validate_limit
 from my_cli.util.mail_helpers import resolve_message_context
 
 
@@ -73,21 +73,21 @@ class TestAppleScriptErrorHandling:
 
     def test_empty_string_returns_empty(self):
         """Test that empty strings are handled in field parsing."""
-        parts = "".split("\x1F")
+        parts = "".split(FIELD_SEPARATOR)
         assert len(parts) == 1  # Empty string splits to ['']
         assert parts[0] == ""
 
     def test_insufficient_field_count_detection(self):
         """Test detection of malformed data with too few fields."""
-        line = "iCloud\x1F123\x1FSubject\x1Fsender@example.com"  # Only 4 fields
-        parts = line.split("\x1F")
+        line = f"iCloud{FIELD_SEPARATOR}123{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@example.com"  # Only 4 fields
+        parts = line.split(FIELD_SEPARATOR)
         # Should have at least 5 fields for summary, 6 for triage
         assert len(parts) < 5
 
     def test_valid_field_count_detection(self):
         """Test valid message parsing."""
-        line = "iCloud\x1F123\x1FSubject\x1Fsender@example.com\x1F2026-01-01\x1Ftrue"
-        parts = line.split("\x1F")
+        line = f"iCloud{FIELD_SEPARATOR}123{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}2026-01-01{FIELD_SEPARATOR}true"
+        parts = line.split(FIELD_SEPARATOR)
         assert len(parts) >= 5  # Has enough fields for message parsing
 
 

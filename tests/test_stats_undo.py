@@ -1,19 +1,10 @@
 """Tests for enhanced stats and undo functionality."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 import pytest
+from my_cli.config import FIELD_SEPARATOR
 from my_cli.commands.mail.analytics import cmd_stats
 
-
-@pytest.fixture
-def mock_args():
-    """Create mock args object."""
-    def _create(**kwargs):
-        args = Mock()
-        for k, v in kwargs.items():
-            setattr(args, k, v)
-        return args
-    return _create
 
 
 class TestEnhancedStats:
@@ -24,10 +15,10 @@ class TestEnhancedStats:
         """Test that --all flag shows account-wide stats."""
         # Mock AppleScript output: grand totals on first line, then per-mailbox
         mock_run.return_value = (
-            "150\x1F25\n"  # Grand totals: 150 total, 25 unread
-            "INBOX\x1F100\x1F20\n"
-            "Sent Messages\x1F30\x1F0\n"
-            "Archive\x1F20\x1F5"
+            f"150{FIELD_SEPARATOR}25\n"  # Grand totals: 150 total, 25 unread
+            f"INBOX{FIELD_SEPARATOR}100{FIELD_SEPARATOR}20\n"
+            f"Sent Messages{FIELD_SEPARATOR}30{FIELD_SEPARATOR}0\n"
+            f"Archive{FIELD_SEPARATOR}20{FIELD_SEPARATOR}5"
         )
         args = mock_args(account="iCloud", all=True, json=False, mailbox=None)
 
@@ -43,7 +34,7 @@ class TestEnhancedStats:
     @patch("my_cli.commands.mail.analytics.run")
     def test_stats_without_all_flag_single_mailbox(self, mock_run, mock_args, capsys):
         """Test that without --all flag, shows single mailbox stats."""
-        mock_run.return_value = "100\x1F20"  # 100 total, 20 unread
+        mock_run.return_value = f"100{FIELD_SEPARATOR}20"  # 100 total, 20 unread
         args = mock_args(account="iCloud", all=False, json=False, mailbox="INBOX")
 
         cmd_stats(args)

@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 
-APPLESCRIPT_TIMEOUT = 30
+from my_cli.config import APPLESCRIPT_TIMEOUT_DEFAULT
 
 
 def escape(s: str) -> str:
@@ -26,7 +26,7 @@ def sanitize_path(path: str) -> str:
     return os.path.abspath(os.path.expanduser(path))
 
 
-def run(script: str, timeout: int = APPLESCRIPT_TIMEOUT) -> str:
+def run(script: str, timeout: int = APPLESCRIPT_TIMEOUT_DEFAULT) -> str:
     """Execute AppleScript and return stdout. Exits on error."""
     try:
         result = subprocess.run(

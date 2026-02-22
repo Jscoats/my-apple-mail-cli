@@ -16,7 +16,7 @@ def mock_run(monkeypatch):
     monkeypatch.setattr("my_cli.util.applescript.run", mock)
 
     # Mock the template function to return a simple script
-    def mock_template(inner_ops, cap=20):
+    def mock_template(inner_ops, cap=20, account=None):
         return 'tell application "Mail"\nset output to ""\nend tell'
 
     monkeypatch.setattr(

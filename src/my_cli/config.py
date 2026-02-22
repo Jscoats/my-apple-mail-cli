@@ -19,9 +19,12 @@ import fcntl
 import time
 from contextlib import contextmanager
 
+from my_cli.util.formatting import die
+
 CONFIG_DIR = os.path.expanduser("~/.config/my")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 STATE_FILE = os.path.join(CONFIG_DIR, "state.json")
+TEMPLATES_FILE = os.path.join(CONFIG_DIR, "mail-templates.json")
 
 DEFAULT_MESSAGE_LIMIT = 25
 MAX_MESSAGE_LIMIT = 100
@@ -45,6 +48,12 @@ APPLESCRIPT_TIMEOUT_BATCH = 120
 FIELD_SEPARATOR = "\x1F"
 RECORD_SEPARATOR = "\x1FEND\x1F"
 
+# Common patterns for identifying no-reply / automated senders
+NOREPLY_PATTERNS = [
+    "noreply", "no-reply", "notifications", "mailer-daemon", "donotreply",
+    "updates@", "news@", "info@", "support@", "billing@",
+]
+
 
 def _ensure_dir() -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
@@ -57,32 +66,36 @@ def _file_lock(path: str):
     max_retries = 10
     retry_delay = 0.05  # 50ms
 
-    _ensure_dir()
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
     for attempt in range(max_retries):
         try:
-            lock_file = open(lock_path, "w")
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            try:
-                yield lock_file
-            finally:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-                lock_file.close()
+            with open(lock_path, "w") as lock_file:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                try:
+                    yield lock_file
+                finally:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                    try:
+                        os.unlink(lock_path)
+                    except OSError:
+                        pass
             break
         except BlockingIOError:
             if attempt < max_retries - 1:
                 time.sleep(retry_delay)
             else:
-                raise RuntimeError(f"Could not acquire lock on {path} after {max_retries} attempts")
+                die(f"Could not acquire file lock for {path} after {max_retries} attempts. Another process may be holding it.")
 
 
 def _load_json(path: str) -> dict:
     if os.path.isfile(path):
         try:
-            with open(path) as f:
-                content = f.read().strip()
-                if not content:  # Handle empty/truncated files
-                    return {}
-                return json.loads(content)
+            with _file_lock(path):
+                with open(path) as f:
+                    content = f.read().strip()
+                    if not content:  # Handle empty/truncated files
+                        return {}
+                    return json.loads(content)
         except (json.JSONDecodeError, IOError):
             return {}
     return {}

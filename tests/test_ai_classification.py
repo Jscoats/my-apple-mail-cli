@@ -4,6 +4,7 @@ These tests focus on the classification logic and data processing,
 not the full AppleScript execution pipeline.
 """
 
+from my_cli.config import FIELD_SEPARATOR
 from my_cli.util.mail_helpers import normalize_subject
 
 
@@ -145,9 +146,8 @@ class TestMessageFieldParsing:
 
     def test_field_separator_split(self):
         """Test splitting by field separator."""
-        FIELD_SEP = "\x1F"
-        line = f"account{FIELD_SEP}123{FIELD_SEP}Subject{FIELD_SEP}sender@example.com{FIELD_SEP}2026-01-01"
-        parts = line.split(FIELD_SEP)
+        line = f"account{FIELD_SEPARATOR}123{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}2026-01-01"
+        parts = line.split(FIELD_SEPARATOR)
 
         assert len(parts) == 5
         assert parts[0] == "account"
@@ -158,10 +158,9 @@ class TestMessageFieldParsing:
 
     def test_insufficient_fields_detection(self):
         """Should detect when message has too few fields."""
-        FIELD_SEP = "\x1F"
         # Only 3 fields when expecting 5+
-        line = f"account{FIELD_SEP}123{FIELD_SEP}Subject"
-        parts = line.split(FIELD_SEP)
+        line = f"account{FIELD_SEPARATOR}123{FIELD_SEPARATOR}Subject"
+        parts = line.split(FIELD_SEPARATOR)
 
         assert len(parts) < 5
 

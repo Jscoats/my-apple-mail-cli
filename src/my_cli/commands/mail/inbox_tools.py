@@ -8,6 +8,7 @@ from my_cli.config import (
     DEFAULT_MAILBOX,
     FIELD_SEPARATOR,
     MAX_MESSAGES_BATCH,
+    NOREPLY_PATTERNS,
     resolve_account,
 )
 from my_cli.util.applescript import escape, run
@@ -24,12 +25,6 @@ def cmd_process_inbox(args) -> None:
     """Read-only diagnostic: categorize unread messages and output action plan."""
     account = resolve_account(getattr(args, "account", None))
     limit = getattr(args, "limit", 50)
-
-    # Patterns for categorizing notifications (reuse from ai.py triage)
-    noreply_patterns = [
-        "noreply", "no-reply", "notifications", "mailer-daemon",
-        "donotreply", "updates@", "news@", "info@", "support@", "billing@"
-    ]
 
     # Build AppleScript to scan INBOX(es)
     if account:
@@ -49,7 +44,7 @@ def cmd_process_inbox(args) -> None:
                             if (count of unreadMsgs) < cap then set cap to (count of unreadMsgs)
                             repeat with j from 1 to cap
                                 set m to item j of unreadMsgs
-                                set output to output & acctName & "\x1F" & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & "\x1F" & (flagged status of m) & linefeed
+                                set output to output & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & linefeed
                                 set totalFound to totalFound + 1
                             end repeat
                         end try
@@ -79,7 +74,7 @@ def cmd_process_inbox(args) -> None:
                                 if (count of unreadMsgs) < cap then set cap to (count of unreadMsgs)
                                 repeat with j from 1 to cap
                                     set m to item j of unreadMsgs
-                                    set output to output & acctName & "\x1F" & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & "\x1F" & (flagged status of m) & linefeed
+                                    set output to output & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & linefeed
                                     set totalFound to totalFound + 1
                                 end repeat
                             end try
@@ -119,7 +114,7 @@ def cmd_process_inbox(args) -> None:
 
         if msg["flagged"]:
             flagged.append(msg)
-        elif any(p in msg["sender"].lower() for p in noreply_patterns):
+        elif any(p in extract_email(msg["sender"]).lower() for p in NOREPLY_PATTERNS):
             notifications.append(msg)
         else:
             people.append(msg)
@@ -194,7 +189,7 @@ def cmd_clean_newsletters(args) -> None:
             set output to ""
             repeat with i from 1 to cap
                 set m to item i of allMsgs
-                set output to output & (sender of m) & "\x1F" & (read status of m) & linefeed
+                set output to output & (sender of m) & "{FIELD_SEPARATOR}" & (read status of m) & linefeed
             end repeat
             return output
         end tell
@@ -216,7 +211,7 @@ def cmd_clean_newsletters(args) -> None:
                                 if msgCount < cap then set cap to msgCount
                                 repeat with i from 1 to cap
                                     set m to item i of allMsgs
-                                    set output to output & (sender of m) & "\x1F" & (read status of m) & linefeed
+                                    set output to output & (sender of m) & "{FIELD_SEPARATOR}" & (read status of m) & linefeed
                                     set totalFound to totalFound + 1
                                     if totalFound >= {limit} then exit repeat
                                 end repeat
@@ -252,13 +247,11 @@ def cmd_clean_newsletters(args) -> None:
                 sender_stats[email]["unread"] += 1
 
     # Identify likely newsletters
-    noreply_patterns = ["noreply", "no-reply", "notifications", "mailer-daemon", "donotreply", "updates@", "news@", "info@", "support@", "billing@", "newsletter", "digest"]
-
     newsletters = []
     for email, stats in sender_stats.items():
         is_likely_newsletter = (
             stats["total"] >= 3 or
-            any(pattern in email.lower() for pattern in noreply_patterns)
+            any(pattern in email.lower() for pattern in NOREPLY_PATTERNS)
         )
         if is_likely_newsletter:
             newsletters.append({
@@ -303,8 +296,6 @@ def cmd_weekly_review(args) -> None:
     since_dt = datetime.now() - timedelta(days=days)
     since_as = to_applescript_date(since_dt)
 
-    noreply_patterns = ["noreply", "no-reply", "notifications", "mailer-daemon", "donotreply", "updates@", "news@", "info@", "support@", "billing@"]
-
     if account:
         acct_escaped = escape(account)
 
@@ -316,7 +307,7 @@ def cmd_weekly_review(args) -> None:
             repeat with mb in (every mailbox of acct)
                 set flaggedMsgs to (every message of mb whose flagged status is true)
                 repeat with m in flaggedMsgs
-                    set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & linefeed
+                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
                 end repeat
             end repeat
             return output
@@ -336,7 +327,7 @@ def cmd_weekly_review(args) -> None:
                 repeat with i from 1 to cap
                     set m to item i of msgs
                     if (count of mail attachments of m) > 0 then
-                        set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & "\x1F" & (count of mail attachments of m) & linefeed
+                        set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (count of mail attachments of m) & linefeed
                     end if
                 end repeat
             end repeat
@@ -356,7 +347,7 @@ def cmd_weekly_review(args) -> None:
                 if msgCount < cap then set cap to msgCount
                 repeat with i from 1 to cap
                     set m to item i of msgs
-                    set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & linefeed
+                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
                 end repeat
             end repeat
             return output
@@ -364,7 +355,7 @@ def cmd_weekly_review(args) -> None:
         """
     else:
         # Scan all enabled accounts
-        flagged_script = """
+        flagged_script = f"""
         tell application "Mail"
             set output to ""
             repeat with acct in (every account)
@@ -372,7 +363,7 @@ def cmd_weekly_review(args) -> None:
                     repeat with mb in (every mailbox of acct)
                         set flaggedMsgs to (every message of mb whose flagged status is true)
                         repeat with m in flaggedMsgs
-                            set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & linefeed
+                            set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
                         end repeat
                     end repeat
                 end if
@@ -394,7 +385,7 @@ def cmd_weekly_review(args) -> None:
                         repeat with i from 1 to cap
                             set m to item i of msgs
                             if (count of mail attachments of m) > 0 then
-                                set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & "\x1F" & (count of mail attachments of m) & linefeed
+                                set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (count of mail attachments of m) & linefeed
                             end if
                         end repeat
                     end repeat
@@ -416,7 +407,7 @@ def cmd_weekly_review(args) -> None:
                         if msgCount < cap then set cap to msgCount
                         repeat with i from 1 to cap
                             set m to item i of msgs
-                            set output to output & (id of m) & "\x1F" & (subject of m) & "\x1F" & (sender of m) & "\x1F" & (date received of m) & linefeed
+                            set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
                         end repeat
                     end repeat
                 end if
@@ -471,7 +462,7 @@ def cmd_weekly_review(args) -> None:
             if len(parts) >= 4:
                 sender_email = extract_email(parts[2])
                 # Skip if sender matches noreply patterns
-                if not any(pattern in sender_email.lower() for pattern in noreply_patterns):
+                if not any(pattern in sender_email.lower() for pattern in NOREPLY_PATTERNS):
                     unreplied_messages.append({
                         "id": int(parts[0]) if parts[0].isdigit() else parts[0],
                         "subject": parts[1],

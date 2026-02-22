@@ -1,12 +1,11 @@
 """Setup wizard for first-time configuration: init."""
 
-import json
 import os
 import sys
 import tty
 import termios
 
-from my_cli.config import CONFIG_DIR, CONFIG_FILE, FIELD_SEPARATOR, get_config
+from my_cli.config import CONFIG_DIR, CONFIG_FILE, FIELD_SEPARATOR, get_config, _save_json  # noqa: F401 — CONFIG_DIR imported for test monkeypatching
 from my_cli.util.applescript import run
 from my_cli.util.formatting import format_output
 
@@ -157,14 +156,14 @@ def cmd_init(args) -> None:
             return
 
     # Detect accounts via AppleScript
-    script = """
+    script = f"""
 tell application "Mail"
     set output to ""
     repeat with acct in (every account)
         set acctName to name of acct
         set acctEmail to user name of acct
         set acctEnabled to enabled of acct
-        set output to output & acctName & "\x1F" & acctEmail & "\x1F" & acctEnabled & linefeed
+        set output to output & acctName & "{FIELD_SEPARATOR}" & acctEmail & "{FIELD_SEPARATOR}" & acctEnabled & linefeed
     end repeat
     return output
 end tell
@@ -284,9 +283,7 @@ end tell
     if todoist_token:
         config["todoist_api_token"] = todoist_token
 
-    os.makedirs(CONFIG_DIR, exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(config, f, indent=2)
+    _save_json(CONFIG_FILE, config)
 
     # Success output
     success_text = (
