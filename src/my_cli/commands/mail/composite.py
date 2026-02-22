@@ -282,9 +282,10 @@ def cmd_reply(args) -> None:
 
     draft_script = f"""
     tell application "Mail"
+        set senderEmail to item 1 of (email addresses of account "{acct_escaped}")
         set newMsg to make new outgoing message with properties {{subject:"{subject_escaped}", content:"{body_escaped}", visible:true}}
         tell newMsg
-            set sender to "{acct_escaped}"
+            set sender to senderEmail
             make new to recipient at end of to recipients with properties {{address:"{reply_to_escaped}"}}
         end tell
         return "draft created"
@@ -345,9 +346,10 @@ def cmd_forward(args) -> None:
 
     draft_script = f"""
     tell application "Mail"
+        set senderEmail to item 1 of (email addresses of account "{acct_escaped}")
         set newMsg to make new outgoing message with properties {{subject:"{subject_escaped}", content:"{body_escaped}", visible:true}}
         tell newMsg
-            set sender to "{acct_escaped}"
+            set sender to senderEmail
             make new to recipient at end of to recipients with properties {{address:"{to_escaped}"}}
         end tell
         return "draft created"

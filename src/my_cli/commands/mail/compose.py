@@ -81,9 +81,10 @@ def cmd_draft(args) -> None:
 
     script = f"""
     tell application "Mail"
+        set senderEmail to item 1 of (email addresses of account "{acct_escaped}")
         set newMsg to make new outgoing message with properties {{subject:"{subject_escaped}", content:"{body_escaped}", visible:true}}
         tell newMsg
-            set sender to "{acct_escaped}"
+            set sender to senderEmail
             {all_recipient_commands}
         end tell
         return "draft created"
