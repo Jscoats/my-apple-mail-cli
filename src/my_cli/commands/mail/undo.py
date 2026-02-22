@@ -159,19 +159,55 @@ def cmd_undo(args) -> None:
                       })
 
     elif operation_type == "batch-delete":
-        # Cannot truly undo delete — messages are in Trash
-        # We can inform the user where to find them
-        mailbox = last_op.get("source_mailbox")
-        older_than_days = last_op.get("older_than_days", "unknown")
-        format_output(args, f"Cannot restore deleted messages automatically. Check Trash in account '{account}'. "
-                            f"Original operation: deleted {len(message_ids)} messages from '{mailbox}' (older than {older_than_days} days).",
-                      json_data={
-                          "operation": "undo-batch-delete",
-                          "account": account,
-                          "mailbox": mailbox,
-                          "message_ids": message_ids,
-                          "note": "Messages are in Trash. Restore manually.",
-                      })
+        # Reverse delete: move messages from Trash back to source_mailbox (or INBOX if unknown)
+        source_mailbox = last_op.get("source_mailbox")
+        restore_mailbox = source_mailbox if source_mailbox else "INBOX"
+        restore_note = None if source_mailbox else "Original mailbox unknown; restored to INBOX."
+
+        trash_escaped = escape("Trash")
+        restore_escaped = escape(restore_mailbox)
+
+        id_list = ", ".join(str(mid) for mid in message_ids)
+
+        script = f"""
+        tell application "Mail"
+            set acct to account "{acct_escaped}"
+            set trashMb to mailbox "{trash_escaped}" of acct
+            set restoreMb to mailbox "{restore_escaped}" of acct
+            set movedCount to 0
+            set targetIds to {{{id_list}}}
+            repeat with targetId in targetIds
+                try
+                    set msgs to (every message of trashMb whose id is targetId)
+                    if (count of msgs) > 0 then
+                        set m to item 1 of msgs
+                        move m to restoreMb
+                        set movedCount to movedCount + 1
+                    end if
+                end try
+            end repeat
+            return movedCount
+        end tell
+        """
+
+        result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
+        moved = int(result) if result.isdigit() else 0
+        sender = last_op.get("sender", "unknown sender")
+        msg = f"Undid batch-delete: moved {moved}/{len(message_ids)} messages from Trash back to '{restore_mailbox}'."
+        if restore_note:
+            msg += f" Note: {restore_note}"
+        json_result = {
+            "operation": "undo-batch-delete",
+            "account": account,
+            "from_mailbox": "Trash",
+            "to_mailbox": restore_mailbox,
+            "sender": sender,
+            "restored": moved,
+            "total": len(message_ids),
+        }
+        if restore_note:
+            json_result["note"] = restore_note
+        format_output(args, msg, json_data=json_result)
 
     else:
         die(f"Unknown operation type '{operation_type}'. Cannot undo.")

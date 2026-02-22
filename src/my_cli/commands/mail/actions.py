@@ -7,7 +7,7 @@ import urllib.request
 import urllib.error
 
 from my_cli.config import APPLESCRIPT_TIMEOUT_SHORT, FIELD_SEPARATOR, resolve_account
-from my_cli.util.applescript import escape, run
+from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.applescript_templates import set_message_property
 from my_cli.util.formatting import die, format_output, truncate
 from my_cli.util.mail_helpers import resolve_mailbox, resolve_message_context, parse_email_headers
@@ -15,7 +15,7 @@ from my_cli.util.mail_helpers import resolve_mailbox, resolve_message_context, p
 
 def _mark_read_status(args, read_status: bool) -> None:
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     read_val = "true" if read_status else "false"
 
     script = set_message_property(
@@ -31,7 +31,7 @@ def _mark_read_status(args, read_status: bool) -> None:
 
 def _flag_status(args, flagged: bool) -> None:
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     flagged_val = "true" if flagged else "false"
 
     script = set_message_property(
@@ -74,7 +74,7 @@ def cmd_move(args) -> None:
     dest = getattr(args, "to_mailbox", None)
     if not source or not dest:
         die("Both --from and --to mailboxes are required.")
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
 
     acct_escaped = escape(account)
     source = resolve_mailbox(account, source)
@@ -101,7 +101,7 @@ def cmd_move(args) -> None:
 def cmd_delete(args) -> None:
     """Delete a message by moving it to Trash."""
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
 
     script = f"""
     tell application "Mail"
@@ -139,7 +139,7 @@ def cmd_unsubscribe(args) -> None:
     dry_run = getattr(args, "dry_run", False)
     force_open = getattr(args, "open", False)
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
 
     # Fetch headers + subject
     script = f"""
@@ -199,8 +199,7 @@ def cmd_unsubscribe(args) -> None:
     if one_click and not force_open:
         url = https_urls[0]
         try:
-            # Use macOS system cert bundle to avoid SSL errors with uv Python
-            ctx = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
+            ctx = ssl.create_default_context()
             req = urllib.request.Request(
                 url,
                 data=b"List-Unsubscribe=One-Click",
@@ -250,7 +249,7 @@ def cmd_unsubscribe(args) -> None:
 def cmd_junk(args) -> None:
     """Mark a message as junk or spam."""
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
 
     script = set_message_property(
         f'"{acct_escaped}"', f'"{mb_escaped}"', message_id,
@@ -270,7 +269,7 @@ def cmd_not_junk(args) -> None:
     account = resolve_account(getattr(args, "account", None))
     if not account:
         die("Account required. Use -a ACCOUNT.")
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
 
     acct_escaped = escape(account)
     junk_mailbox = resolve_mailbox(account, "Junk")
@@ -303,7 +302,7 @@ def cmd_not_junk(args) -> None:
 def cmd_open(args) -> None:
     """Open a message in Mail.app."""
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
 
     script = f"""
     tell application "Mail"

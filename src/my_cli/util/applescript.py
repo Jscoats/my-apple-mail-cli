@@ -9,6 +9,23 @@ import sys
 from my_cli.config import APPLESCRIPT_TIMEOUT_DEFAULT
 
 
+def validate_msg_id(value) -> int:
+    """Validate that value is a positive integer suitable for use as a message ID.
+
+    Raises SystemExit via die() if the value is not a positive integer.
+    Returns the integer value on success.
+    """
+    from my_cli.util.formatting import die
+
+    try:
+        int_val = int(value)
+    except (TypeError, ValueError):
+        die(f"Invalid message ID '{value}': must be a positive integer.")
+    if int_val <= 0:
+        die(f"Invalid message ID '{value}': must be a positive integer.")
+    return int_val
+
+
 def escape(s: str) -> str:
     """Escape a string for safe use in AppleScript."""
     if s is None:

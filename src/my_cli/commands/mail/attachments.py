@@ -2,7 +2,7 @@
 
 import os
 
-from my_cli.util.applescript import escape, run, sanitize_path
+from my_cli.util.applescript import escape, run, sanitize_path, validate_msg_id
 from my_cli.util.applescript_templates import list_attachments
 from my_cli.util.formatting import die, format_output, truncate
 from my_cli.util.mail_helpers import resolve_message_context
@@ -11,7 +11,7 @@ from my_cli.util.mail_helpers import resolve_message_context
 def cmd_attachments(args) -> None:
     """List attachments on a message."""
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
 
     script = list_attachments(f'"{acct_escaped}"', f'"{mb_escaped}"', message_id)
 
@@ -39,7 +39,7 @@ def cmd_attachments(args) -> None:
 def cmd_save_attachment(args) -> None:
     """Save an attachment from a message to disk."""
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     attachment = args.attachment
     output_dir = sanitize_path(getattr(args, "output_dir", "~/Downloads"))
 

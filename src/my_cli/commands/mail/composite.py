@@ -13,7 +13,7 @@ from my_cli.config import (
     RECORD_SEPARATOR,
     resolve_account,
 )
-from my_cli.util.applescript import escape, run
+from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.formatting import die, format_output, truncate
 from my_cli.util.mail_helpers import extract_email, normalize_subject
 
@@ -155,7 +155,7 @@ def cmd_thread(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     limit = getattr(args, "limit", 100)
     all_accounts = getattr(args, "all_accounts", False)
 
@@ -242,7 +242,7 @@ def cmd_reply(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     body = args.body
 
     acct_escaped = escape(account)
@@ -309,7 +309,7 @@ def cmd_forward(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     to_addr = args.to
 
     acct_escaped = escape(account)

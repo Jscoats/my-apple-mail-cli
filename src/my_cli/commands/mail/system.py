@@ -5,7 +5,7 @@ from my_cli.config import (
     FIELD_SEPARATOR,
     resolve_account,
 )
-from my_cli.util.applescript import escape, run
+from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.formatting import die, format_output, truncate
 from my_cli.util.mail_helpers import parse_email_headers
 
@@ -36,7 +36,7 @@ def cmd_headers(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
 
     acct_escaped = escape(account)
     mb_escaped = escape(mailbox)

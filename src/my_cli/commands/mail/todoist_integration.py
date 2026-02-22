@@ -9,7 +9,7 @@ from my_cli.config import (
     FIELD_SEPARATOR,
     get_config,
 )
-from my_cli.util.applescript import run
+from my_cli.util.applescript import run, validate_msg_id
 from my_cli.util.formatting import die, format_output
 from my_cli.util.mail_helpers import resolve_message_context
 
@@ -21,7 +21,7 @@ from my_cli.util.mail_helpers import resolve_message_context
 def cmd_to_todoist(args) -> None:
     """Create a Todoist task from an email."""
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     project = getattr(args, "project", None)
     priority = getattr(args, "priority", 1)
     due = getattr(args, "due", None)
@@ -75,8 +75,7 @@ def cmd_to_todoist(args) -> None:
         method="POST"
     )
 
-    # Use macOS cert bundle for SSL verification
-    ssl_context = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
+    ssl_context = ssl.create_default_context()
 
     try:
         with urllib.request.urlopen(req, context=ssl_context) as response:

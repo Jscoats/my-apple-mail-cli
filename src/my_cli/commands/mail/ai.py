@@ -11,7 +11,7 @@ from my_cli.config import (
     RECORD_SEPARATOR,
     resolve_account,
 )
-from my_cli.util.applescript import escape, run
+from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.applescript_templates import inbox_iterator_all_accounts
 from my_cli.util.formatting import die, format_output, truncate
 from my_cli.util.mail_helpers import extract_email, normalize_subject
@@ -132,7 +132,7 @@ def cmd_context(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     limit = getattr(args, "limit", 50)
     all_accounts = getattr(args, "all_accounts", False)
 
