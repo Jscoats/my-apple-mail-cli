@@ -100,6 +100,57 @@ def extract_email(sender_str: str) -> str:
     return email if email else sender_str
 
 
+def parse_message_line(
+    line: str,
+    fields: list[str],
+    separator: str,
+) -> dict | None:
+    """Parse a single FIELD_SEPARATOR-delimited AppleScript output line into a dict.
+
+    Args:
+        line: A single raw output line from AppleScript.
+        fields: Ordered list of field names corresponding to each split part.
+            The last field name absorbs all remaining parts (useful when a field
+            like 'body' or 'content' may itself contain the separator).
+        separator: The field separator string (typically FIELD_SEPARATOR).
+
+    Returns:
+        A dict mapping field names to string values, or None if the line has
+        fewer parts than required (i.e. len(fields) fields).
+
+    Special coercions applied automatically:
+        - Fields named 'id' or ending in '_id': coerced to int when the value
+          is a digit string, otherwise kept as-is.
+        - Fields named 'read', 'flagged', 'junk', 'deleted', 'forwarded',
+          'replied': coerced to bool (True when value lower() == 'true').
+
+    Example::
+        parse_message_line(line, ["id", "subject", "sender", "date"], SEP)
+        # -> {"id": 42, "subject": "Hello", "sender": "...", "date": "..."}
+    """
+    parts = line.split(separator)
+    if len(parts) < len(fields):
+        return None
+
+    _BOOL_FIELDS = {"read", "flagged", "junk", "deleted", "forwarded", "replied"}
+    result: dict = {}
+    for i, name in enumerate(fields):
+        if i == len(fields) - 1:
+            # Last field absorbs remaining parts
+            raw = separator.join(parts[i:])
+        else:
+            raw = parts[i]
+
+        if name == "id" or name.endswith("_id"):
+            result[name] = int(raw) if raw.isdigit() else raw
+        elif name in _BOOL_FIELDS:
+            result[name] = raw.lower() == "true"
+        else:
+            result[name] = raw
+
+    return result
+
+
 def normalize_subject(subject: str) -> str:
     """Normalize email subject by removing Re:/Fwd:/Fw:/AW:/SV:/VS: prefixes.
 

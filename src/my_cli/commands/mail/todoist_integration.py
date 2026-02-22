@@ -2,7 +2,6 @@
 
 import json
 import ssl
-import sys
 import urllib.request
 import urllib.error
 
@@ -33,6 +32,8 @@ def cmd_to_todoist(args) -> None:
     if not token:
         die("Todoist API token not configured. Add 'todoist_api_token' to ~/.config/my/config.json")
 
+    ssl_context = ssl.create_default_context()
+
     # Read the email via AppleScript
     script = f"""
     tell application "Mail"
@@ -52,22 +53,34 @@ def cmd_to_todoist(args) -> None:
 
     subject, sender, date = parts[0], parts[1], parts[2]
 
+    # Resolve project name to ID if provided
+    project_id = None
+    if project:
+        projects_req = urllib.request.Request(
+            "https://api.todoist.com/rest/v2/projects",
+            headers={"Authorization": f"Bearer {token}"},
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(projects_req, context=ssl_context) as resp:
+                projects = json.loads(resp.read().decode("utf-8"))
+            match = next((p for p in projects if p.get("name", "").lower() == project.lower()), None)
+            if match is None:
+                die(f"Todoist project '{project}' not found. Check the name and try again.")
+            project_id = match["id"]
+        except urllib.error.HTTPError as e:
+            die(f"Todoist API error resolving project ({e.code}): {e.read().decode('utf-8')}")
+        except urllib.error.URLError as e:
+            die(f"Network error resolving project: {e.reason}")
+
     # Build Todoist task payload
     task_data = {
         "content": subject,
         "description": f"From: {sender}\nDate: {date}\nMessage ID: {message_id}",
         "priority": priority,
     }
-    if project:
-        # The Todoist REST API v2 does not accept a `project_name` field for task
-        # creation — it only supports `project_id`. Resolving a name to an ID would
-        # require an additional API call and error handling, so project assignment by
-        # name is not currently implemented.  The task will be created in the Inbox.
-        print(
-            f"Warning: --project is not currently supported by the Todoist REST API v2. "
-            f"The task will be created in the Inbox (project '{project}' ignored).",
-            file=sys.stderr,
-        )
+    if project_id:
+        task_data["project_id"] = project_id
     if due:
         task_data["due_string"] = due
 
@@ -83,8 +96,6 @@ def cmd_to_todoist(args) -> None:
         headers=headers,
         method="POST"
     )
-
-    ssl_context = ssl.create_default_context()
 
     try:
         with urllib.request.urlopen(req, context=ssl_context) as response:
@@ -113,7 +124,7 @@ def register(subparsers) -> None:
     p.add_argument("id", type=int, help="Message ID")
     p.add_argument("-a", "--account", help="Mail account name")
     p.add_argument("-m", "--mailbox", help="Mailbox name (default: INBOX)")
-    p.add_argument("--project", help="Todoist project name (not currently functional — project assignment by name is not supported by the API; task will be created in Inbox)")
+    p.add_argument("--project", help="Todoist project name (resolves to project ID via API; task goes to Inbox if omitted)")
     p.add_argument("--priority", type=int, choices=[1, 2, 3, 4], default=1, help="Priority (1-4, 4=highest)")
     p.add_argument("--due", help="Due date (natural language, e.g. 'tomorrow')")
     p.add_argument("--json", action="store_true", help="Output as JSON")

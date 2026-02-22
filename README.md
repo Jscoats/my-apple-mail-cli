@@ -60,6 +60,53 @@ my mail draft --to colleague@company.com --template "weekly-update"
 my mail to-todoist 123 --project Work
 ```
 
+## 📺 Example Output
+
+### `my mail inbox`
+```
+Inbox Overview
+──────────────────────────────────────────
+  iCloud             3 unread   (47 total)
+  Work Email         12 unread  (203 total)
+  Johnny.Coats84@gmail.com  0 unread  (18 total)
+──────────────────────────────────────────
+  Total              15 unread
+```
+
+### `my mail triage`
+```
+Triage — 15 Unread Messages
+══════════════════════════════════════════
+
+[URGENT — 2]
+  #4821  Sarah Johnson       Re: Contract review deadline TODAY
+  #4819  boss@company.com    Q4 budget approval needed
+
+[PEOPLE — 5]
+  #4820  mom@gmail.com       Thanksgiving plans?
+  #4818  john.smith@work.com Project kickoff Thursday?
+  #4817  recruiter@corp.com  Opportunity at TechCorp
+  #4815  friend@gmail.com    Weekend hiking trip
+  #4814  alice@work.com      Coffee catch-up?
+
+[NOTIFICATIONS — 8]
+  #4816  GitHub              [my-apple-mail-cli] PR #12 merged
+  #4813  noreply@bank.com    Statement available
+  ... and 6 more
+```
+
+### `my mail summary`
+```
+15 unread — iCloud + Work Email
+
+• Contract review deadline TODAY — Sarah Johnson (urgent, reply needed)
+• Q4 budget approval — boss@company.com (action required)
+• Thanksgiving plans — mom@gmail.com (personal, low urgency)
+• Project kickoff Thursday — john.smith@work.com (confirm attendance)
+• PR #12 merged — GitHub notification (no action needed)
+• 10 more notifications and newsletters
+```
+
 ## 📚 Command Categories
 
 ### Setup
@@ -204,12 +251,23 @@ The CLI is the bridge between Mail.app and whatever tools you use — AI, script
 
 Built with modern Python patterns:
 - **Zero runtime dependencies** (stdlib only)
-- **Comprehensive test suite** (292 tests across 17 test files)
+- **Comprehensive test suite** (348 tests across 16 test files)
 - **Modular command structure** (16 focused modules)
 - **AppleScript bridge** for Mail.app communication
 - **Three-tier account resolution** (explicit flag → config default → last-used)
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation.
+
+## ❓ Why Not X?
+
+**Why not mutt or neomutt?**
+Mutt replaces Mail.app — you lose native macOS notifications, calendar event detection, FaceTime/iMessage continuity, and Rules. This CLI *extends* Mail.app rather than replacing it: your mail is still managed natively, but now also scriptable from the terminal.
+
+**Why not the Gmail API or Outlook API?**
+Those are per-provider — separate SDKs, separate auth flows, separate data models. `my mail` works with any account configured in Mail.app (iCloud, Gmail, Outlook, Exchange, custom IMAP) through a single unified interface. Add a new account to Mail.app and it just works.
+
+**Why not raw AppleScript or Hammerspoon?**
+You could wire this up yourself — but this gives you 49 structured commands with `--json` output, batch operations with undo, template support, Todoist integration, and an AI-ready interface, all without writing a single line of AppleScript. The hard parts (field parsing, timeout handling, account resolution, error recovery) are already done.
 
 ## 🤝 Contributing
 

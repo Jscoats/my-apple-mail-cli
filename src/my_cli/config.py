@@ -105,11 +105,16 @@ def _load_json(path: str) -> dict:
     return {}
 
 
+_SENSITIVE_FILES = {CONFIG_FILE, STATE_FILE, UNDO_LOG_FILE, TEMPLATES_FILE}
+
+
 def _save_json(path: str, data: dict) -> None:
     _ensure_dir()
     with file_lock(path):
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
+        if path in _SENSITIVE_FILES:
+            os.chmod(path, 0o600)
 
 
 def get_config() -> dict:

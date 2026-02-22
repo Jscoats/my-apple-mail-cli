@@ -97,6 +97,7 @@ def cmd_save_attachment(args) -> None:
 
     # Escape for AppleScript
     att_name_escaped = escape(att_name)
+    save_path_posix_escaped = escape(save_path_posix)
 
     # AppleScript to save the attachment
     save_script = f"""
@@ -105,7 +106,7 @@ def cmd_save_attachment(args) -> None:
         set theMsg to first message of mb whose id is {message_id}
         repeat with att in (mail attachments of theMsg)
             if name of att is "{att_name_escaped}" then
-                save att in POSIX file "{save_path_posix}"
+                save att in POSIX file "{save_path_posix_escaped}"
                 return "saved"
             end if
         end repeat

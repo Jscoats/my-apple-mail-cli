@@ -17,7 +17,7 @@ from my_cli.config import (
 from my_cli.util.applescript import escape, run
 from my_cli.util.dates import to_applescript_date
 from my_cli.util.formatting import die, format_output, truncate
-from my_cli.util.mail_helpers import extract_email
+from my_cli.util.mail_helpers import extract_email, parse_message_line
 
 
 # ---------------------------------------------------------------------------
@@ -115,22 +115,16 @@ def cmd_digest(args) -> None:
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 5:
-            acct, msg_id, subject, sender, date = parts[:5]
-            # Extract domain from sender
-            email = extract_email(sender)
-            if "@" in email:
-                domain = email.split("@")[1].lower()
-            else:
-                domain = "other"
-            groups[domain].append({
-                "account": acct,
-                "id": int(msg_id) if msg_id.isdigit() else msg_id,
-                "subject": subject,
-                "sender": sender,
-                "date": date,
-            })
+        msg = parse_message_line(line, ["account", "id", "subject", "sender", "date"], FIELD_SEPARATOR)
+        if msg is None:
+            continue
+        # Extract domain from sender
+        email = extract_email(msg["sender"])
+        if "@" in email:
+            domain = email.split("@")[1].lower()
+        else:
+            domain = "other"
+        groups[domain].append(msg)
 
     total = sum(len(msgs) for msgs in groups.values())
     text = f"Unread Digest ({total} messages, {len(groups)} groups):"
@@ -306,16 +300,9 @@ def cmd_show_flagged(args) -> None:
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 6:
-            messages.append({
-                "id": int(parts[0]) if parts[0].isdigit() else parts[0],
-                "subject": parts[1],
-                "sender": parts[2],
-                "date": parts[3],
-                "mailbox": parts[4],
-                "account": parts[5],
-            })
+        msg = parse_message_line(line, ["id", "subject", "sender", "date", "mailbox", "account"], FIELD_SEPARATOR)
+        if msg is not None:
+            messages.append(msg)
 
     # Build text output
     scope = f" in account '{account}'" if account else " across all accounts"

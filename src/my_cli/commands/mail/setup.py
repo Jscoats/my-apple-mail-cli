@@ -307,7 +307,10 @@ end tell
     )
 
     if getattr(args, "json", False):
-        format_output(args, success_text, json_data=config)
+        redacted = dict(config)
+        if "todoist_api_token" in redacted:
+            redacted = {**redacted, "todoist_api_token": "****"}
+        format_output(args, success_text, json_data=redacted)
     else:
         print(success_text)
 

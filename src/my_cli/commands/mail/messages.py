@@ -12,7 +12,7 @@ from my_cli.config import (
 from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.dates import parse_date, to_applescript_date
 from my_cli.util.formatting import format_output, truncate
-from my_cli.util.mail_helpers import resolve_mailbox, resolve_message_context
+from my_cli.util.mail_helpers import parse_message_line, resolve_mailbox, resolve_message_context
 
 
 # ---------------------------------------------------------------------------
@@ -71,39 +71,26 @@ def cmd_list(args) -> None:
         format_output(args, f"No messages found in {mailbox}{filter_str}.")
         return
 
-    # Build JSON data
+    # Build JSON data and text output
     messages = []
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 6:
-            messages.append({
-                "id": int(parts[0]) if parts[0].isdigit() else parts[0],
-                "subject": parts[1],
-                "sender": parts[2],
-                "date": parts[3],
-                "read": parts[4].lower() == "true",
-                "flagged": parts[5].lower() == "true",
-            })
+        msg = parse_message_line(line, ["id", "subject", "sender", "date", "read", "flagged"], FIELD_SEPARATOR)
+        if msg is not None:
+            messages.append(msg)
 
-    # Build text output
     text = f"Messages in {mailbox} [{account}] (showing up to {limit}):"
-    for line in result.strip().split("\n"):
-        if not line.strip():
-            continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 6:
-            msg_id, subject, sender, date, read, flagged = parts[:6]
-            status_icons = []
-            if read.lower() != "true":
-                status_icons.append("UNREAD")
-            if flagged.lower() == "true":
-                status_icons.append("FLAGGED")
-            status_str = f" [{', '.join(status_icons)}]" if status_icons else ""
-            text += f"\n- [{msg_id}] {truncate(subject, 60)}{status_str}"
-            text += f"\n  From: {sender}"
-            text += f"\n  Date: {date}"
+    for m in messages:
+        status_icons = []
+        if not m["read"]:
+            status_icons.append("UNREAD")
+        if m["flagged"]:
+            status_icons.append("FLAGGED")
+        status_str = f" [{', '.join(status_icons)}]" if status_icons else ""
+        text += f"\n- [{m['id']}] {truncate(m['subject'], 60)}{status_str}"
+        text += f"\n  From: {m['sender']}"
+        text += f"\n  Date: {m['date']}"
     format_output(args, text, json_data=messages)
 
 
@@ -303,42 +290,31 @@ def cmd_search(args) -> None:
         format_output(args, f"No messages found matching '{query}' in {field}{scope}.")
         return
 
-    # Build JSON data
+    # Build JSON data and text output
     messages = []
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 8:
-            messages.append({
-                "id": int(parts[0]) if parts[0].isdigit() else parts[0],
-                "subject": parts[1],
-                "sender": parts[2],
-                "date": parts[3],
-                "read": parts[4].lower() == "true",
-                "flagged": parts[5].lower() == "true",
-                "mailbox": parts[6],
-                "account": parts[7],
-            })
+        msg = parse_message_line(
+            line,
+            ["id", "subject", "sender", "date", "read", "flagged", "mailbox", "account"],
+            FIELD_SEPARATOR,
+        )
+        if msg is not None:
+            messages.append(msg)
 
-    # Build text output
     text = f"Search results for '{query}' in {field} (up to {limit}):"
-    for line in result.strip().split("\n"):
-        if not line.strip():
-            continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 8:
-            msg_id, subject, sender, date, read, flagged, mb, acct = parts[:8]
-            status_icons = []
-            if read.lower() != "true":
-                status_icons.append("UNREAD")
-            if flagged.lower() == "true":
-                status_icons.append("FLAGGED")
-            status_str = f" [{', '.join(status_icons)}]" if status_icons else ""
-            text += f"\n- [{msg_id}] {truncate(subject, 50)}{status_str}"
-            text += f"\n  From: {sender}"
-            text += f"\n  Date: {date}"
-            text += f"\n  Location: {mb} [{acct}]"
+    for m in messages:
+        status_icons = []
+        if not m["read"]:
+            status_icons.append("UNREAD")
+        if m["flagged"]:
+            status_icons.append("FLAGGED")
+        status_str = f" [{', '.join(status_icons)}]" if status_icons else ""
+        text += f"\n- [{m['id']}] {truncate(m['subject'], 50)}{status_str}"
+        text += f"\n  From: {m['sender']}"
+        text += f"\n  Date: {m['date']}"
+        text += f"\n  Location: {m['mailbox']} [{m['account']}]"
     format_output(args, text, json_data=messages)
 
 

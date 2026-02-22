@@ -15,7 +15,7 @@ from my_cli.config import (
 from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.applescript_templates import inbox_iterator_all_accounts
 from my_cli.util.formatting import die, format_output, truncate
-from my_cli.util.mail_helpers import extract_email, normalize_subject
+from my_cli.util.mail_helpers import extract_email, normalize_subject, parse_message_line
 
 
 # ---------------------------------------------------------------------------
@@ -36,15 +36,9 @@ def cmd_summary(args) -> None:
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 5:
-            messages.append({
-                "account": parts[0],
-                "id": int(parts[1]) if parts[1].isdigit() else parts[1],
-                "subject": parts[2],
-                "sender": parts[3],
-                "date": parts[4],
-            })
+        msg = parse_message_line(line, ["account", "id", "subject", "sender", "date"], FIELD_SEPARATOR)
+        if msg is not None:
+            messages.append(msg)
 
     # Ultra-concise format for AI consumption
     text = f"{len(messages)} unread:"
@@ -80,17 +74,9 @@ def cmd_triage(args) -> None:
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) < 6:
+        msg = parse_message_line(line, ["account", "id", "subject", "sender", "date", "flagged"], FIELD_SEPARATOR)
+        if msg is None:
             continue
-        msg = {
-            "account": parts[0],
-            "id": int(parts[1]) if parts[1].isdigit() else parts[1],
-            "subject": parts[2],
-            "sender": parts[3],
-            "date": parts[4],
-            "flagged": parts[5].lower() == "true",
-        }
 
         if msg["flagged"]:
             flagged.append(msg)
@@ -306,19 +292,12 @@ def cmd_find_related(args) -> None:
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 6:
-            msg = {
-                "id": int(parts[0]) if parts[0].isdigit() else parts[0],
-                "subject": parts[1],
-                "sender": parts[2],
-                "date": parts[3],
-                "mailbox": parts[4],
-                "account": parts[5],
-            }
-            # Normalize subject for grouping
-            normalized = normalize_subject(parts[1]).lower()
-            threads[normalized].append(msg)
+        msg = parse_message_line(line, ["id", "subject", "sender", "date", "mailbox", "account"], FIELD_SEPARATOR)
+        if msg is None:
+            continue
+        # Normalize subject for grouping
+        normalized = normalize_subject(msg["subject"]).lower()
+        threads[normalized].append(msg)
 
     text = f"Related messages for '{query}' ({len(threads)} conversations):"
     for thread_subject, msgs in sorted(threads.items(), key=lambda x: -len(x[1])):

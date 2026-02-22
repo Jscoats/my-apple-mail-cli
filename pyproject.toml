@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "my-cli"
+name = "my-apple-mail-cli"
 version = "0.2.0"
 description = "A comprehensive command-line interface for Apple Mail on macOS"
 readme = "README.md"

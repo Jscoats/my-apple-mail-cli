@@ -15,7 +15,7 @@ from my_cli.config import (
 )
 from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.formatting import die, format_output, truncate
-from my_cli.util.mail_helpers import extract_email, normalize_subject
+from my_cli.util.mail_helpers import extract_email, normalize_subject, parse_message_line
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +82,11 @@ def _export_single(args, msg_id: int, account: str, mailbox: str, dest: str) -> 
     dest_path = os.path.expanduser(dest)
     if os.path.isdir(dest_path):
         filepath = os.path.join(dest_path, filename)
+        # Guard against path traversal in the generated filename
+        real_filepath = os.path.realpath(os.path.abspath(filepath))
+        real_dest = os.path.realpath(os.path.abspath(dest_path))
+        if not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest:
+            die("Unsafe export filename: path traversal detected.")
     else:
         filepath = dest_path
 
@@ -214,16 +219,9 @@ def cmd_thread(args) -> None:
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        parts = line.split(FIELD_SEPARATOR)
-        if len(parts) >= 6:
-            messages.append({
-                "id": int(parts[0]) if parts[0].isdigit() else parts[0],
-                "subject": parts[1],
-                "sender": parts[2],
-                "date": parts[3],
-                "mailbox": parts[4],
-                "account": parts[5],
-            })
+        msg = parse_message_line(line, ["id", "subject", "sender", "date", "mailbox", "account"], FIELD_SEPARATOR)
+        if msg is not None:
+            messages.append(msg)
 
     text = f"Thread: {thread_subject} ({len(messages)} messages):"
     for m in messages:

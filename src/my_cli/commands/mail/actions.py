@@ -1,8 +1,11 @@
 """Message action commands: mark-read, mark-unread, flag, unflag, move, delete, unsubscribe."""
 
+import ipaddress
 import re
+import socket
 import ssl
 import subprocess
+import urllib.parse
 import urllib.request
 import urllib.error
 
@@ -124,6 +127,31 @@ def cmd_delete(args) -> None:
 
 
 
+_PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+]
+
+
+def _is_private_url(url: str) -> bool:
+    """Return True if the URL resolves to a private or loopback address."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return True
+        addr = ipaddress.ip_address(socket.gethostbyname(hostname))
+        return any(addr in net for net in _PRIVATE_NETWORKS)
+    except (OSError, ValueError):
+        # DNS failure or invalid address — block to be safe
+        return True
+
+
 def _extract_urls(header_value: str) -> tuple[list[str], list[str]]:
     """Extract https and mailto URLs from a List-Unsubscribe header value.
 
@@ -198,6 +226,8 @@ def cmd_unsubscribe(args) -> None:
     # Attempt one-click unsubscribe (RFC 8058)
     if one_click and not force_open:
         url = https_urls[0]
+        if _is_private_url(url):
+            die(f"Refused to POST to private/internal address: {url}")
         try:
             ctx = ssl.create_default_context()
             req = urllib.request.Request(
