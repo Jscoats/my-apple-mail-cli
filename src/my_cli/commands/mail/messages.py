@@ -348,7 +348,7 @@ def register(subparsers) -> None:
     """Register message listing and reading subcommands."""
     # list
     p = subparsers.add_parser("list", help="List messages in a mailbox")
-    p.add_argument("mailbox", nargs="?", default=None, help="Mailbox name (default: INBOX)")
+    p.add_argument("-m", "--mailbox", default=None, help="Mailbox name (default: INBOX)")
     p.add_argument("-a", "--account", help="Mail account name")
     p.add_argument("--unread", action="store_true", help="Only show unread messages")
     p.add_argument("--limit", type=int, default=DEFAULT_MESSAGE_LIMIT, help="Max messages to show")
