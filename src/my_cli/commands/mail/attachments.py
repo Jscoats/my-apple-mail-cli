@@ -91,7 +91,7 @@ def cmd_save_attachment(args) -> None:
     real_save = os.path.realpath(os.path.abspath(save_path))
     real_base = os.path.realpath(os.path.abspath(output_dir))
     if not real_save.startswith(real_base + os.sep) and real_save != real_base:
-        die(f"Unsafe attachment filename: path traversal detected.")
+        die("Unsafe attachment filename: path traversal detected.")
 
     save_path_posix = save_path  # Already absolute from sanitize_path + join
 
