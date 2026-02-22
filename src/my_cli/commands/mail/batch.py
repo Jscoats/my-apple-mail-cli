@@ -49,7 +49,7 @@ def cmd_batch_read(args) -> None:
     count = int(result) if result.isdigit() else 0
     format_output(args, f"Marked {count} messages as read in {mailbox} [{account}] (limit: {limit}).",
                   json_data={"mailbox": mailbox, "account": account, "marked_read": count, "limit": limit})
-    print("WARNING: This operation cannot be undone via 'my mail undo'. Use --limit to cap scope.", file=sys.stderr)
+    print("Note: batch-read/batch-flag cannot be undone. Use --limit to cap scope (default: 25).", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +89,7 @@ def cmd_batch_flag(args) -> None:
     count = int(result) if result.isdigit() else 0
     format_output(args, f"Flagged {count} messages from '{sender}' in account '{account}' (limit: {limit}).",
                   json_data={"sender": sender, "account": account, "flagged": count, "limit": limit})
-    print("WARNING: This operation cannot be undone via 'my mail undo'. Use --limit to cap scope.", file=sys.stderr)
+    print("Note: batch-read/batch-flag cannot be undone. Use --limit to cap scope (default: 25).", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------

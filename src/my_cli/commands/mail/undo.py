@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from my_cli.config import (
     CONFIG_DIR,
@@ -16,23 +16,35 @@ from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import die, format_output
 
 MAX_UNDO_OPERATIONS = 10
-UNDO_MAX_AGE_HOURS = 24
+UNDO_MAX_AGE_MINUTES = 30
+
+
+def _entry_age_minutes(entry: dict) -> float | None:
+    """Return the age of an undo entry in minutes, or None if timestamp is missing/invalid."""
+    ts = entry.get("timestamp")
+    if not ts:
+        return None
+    try:
+        entry_time = datetime.fromisoformat(ts)
+        return (datetime.now() - entry_time).total_seconds() / 60
+    except (ValueError, TypeError):
+        return None
 
 
 def _is_fresh(entry: dict) -> bool:
-    """Return True if the undo entry is younger than UNDO_MAX_AGE_HOURS."""
-    ts = entry.get("timestamp")
-    if not ts:
+    """Return True if the undo entry is younger than UNDO_MAX_AGE_MINUTES."""
+    age = _entry_age_minutes(entry)
+    if age is None:
         return False
-    try:
-        entry_time = datetime.fromisoformat(ts)
-        return datetime.now() - entry_time < timedelta(hours=UNDO_MAX_AGE_HOURS)
-    except (ValueError, TypeError):
-        return False
+    return age < UNDO_MAX_AGE_MINUTES
 
 
-def _load_undo_log() -> list[dict]:
-    """Load undo log from disk, filtering out entries older than UNDO_MAX_AGE_HOURS."""
+def _load_undo_log(include_stale: bool = False) -> list[dict]:
+    """Load undo log from disk.
+
+    By default, only returns entries younger than UNDO_MAX_AGE_MINUTES.
+    Pass include_stale=True to load all entries regardless of age.
+    """
     if not os.path.isfile(UNDO_LOG_FILE):
         return []
     with file_lock(UNDO_LOG_FILE):
@@ -41,6 +53,8 @@ def _load_undo_log() -> list[dict]:
                 raw = json.load(f)
             except (json.JSONDecodeError, OSError):
                 return []
+    if include_stale:
+        return list(raw)
     return [entry for entry in raw if _is_fresh(entry)]
 
 
@@ -105,9 +119,30 @@ def cmd_undo_list(args) -> None:
 
 def cmd_undo(args) -> None:
     """Undo the most recent batch operation."""
-    operations = _load_undo_log()
-    if not operations:
+    force = getattr(args, "force", False)
+
+    # Load all entries (including stale) so we can give a helpful message when
+    # there ARE entries but they're older than the freshness window.
+    all_ops = _load_undo_log(include_stale=True)
+    fresh_ops = [op for op in all_ops if _is_fresh(op)]
+
+    if not all_ops:
         die("No recent batch operations to undo.")
+
+    if not fresh_ops and not force:
+        # There are entries but they're all stale — tell the user.
+        most_recent = all_ops[-1]
+        age = _entry_age_minutes(most_recent)
+        age_str = f"{int(age)} minutes ago" if age is not None else "unknown time ago"
+        die(
+            f"Nothing recent to undo (most recent operation was {age_str}). "
+            f"Run `my mail undo --list` to see older operations and use "
+            f"`my mail undo --force` to run them."
+        )
+
+    operations = fresh_ops if not force else all_ops
+    if not operations:
+        die("No batch operations to undo.")
 
     # Pop the most recent operation — do NOT write the log yet;
     # only commit removal after the restore work succeeds.
@@ -243,5 +278,6 @@ def register(subparsers) -> None:
     """Register undo mail subcommands."""
     p = subparsers.add_parser("undo", help="Undo most recent batch operation")
     p.add_argument("--list", action="store_true", dest="list_operations", help="List recent undoable operations")
+    p.add_argument("--force", action="store_true", help="Bypass the 30-minute freshness check")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=lambda args: cmd_undo_list(args) if args.list_operations else cmd_undo(args))

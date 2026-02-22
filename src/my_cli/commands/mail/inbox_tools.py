@@ -161,7 +161,10 @@ def _build_newsletters_script(account: str | None, mailbox: str, limit: int) -> 
 
 def cmd_process_inbox(args) -> None:
     """Read-only diagnostic: categorize unread messages and output action plan."""
-    account = resolve_account(getattr(args, "account", None))
+    # Use only the explicitly-passed -a flag, not the config default.
+    # resolve_account() would return the default account (e.g. iCloud) when no
+    # flag is given, causing process-inbox to show only one account instead of all.
+    account = getattr(args, "account", None)
     limit = validate_limit(getattr(args, "limit", 50))
 
     script = _build_process_inbox_script(account, limit)

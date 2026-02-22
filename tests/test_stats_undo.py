@@ -1,5 +1,7 @@
 """Tests for enhanced stats and undo functionality."""
 
+import json
+from datetime import datetime, timedelta
 from unittest.mock import patch
 import pytest
 from my_cli.config import FIELD_SEPARATOR
@@ -302,3 +304,157 @@ class TestCmdUndo:
         captured = capsys.readouterr()
         assert "Undid batch-delete" in captured.out
         assert "3/3" in captured.out
+
+
+class TestUndoStaleness:
+    """Tests for the 30-minute freshness window and --force flag."""
+
+    def test_undo_rejects_stale_entry_without_force(self, tmp_path, monkeypatch, mock_args):
+        """Stale entry (>30 min old) should cause die() without --force."""
+        import my_cli.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        # Write a stale entry directly (60 minutes ago)
+        stale_ts = (datetime.now() - timedelta(minutes=60)).isoformat()
+        test_log.write_text(json.dumps([{
+            "timestamp": stale_ts,
+            "operation": "batch-delete",
+            "account": "iCloud",
+            "message_ids": [999],
+            "source_mailbox": "INBOX",
+            "dest_mailbox": None,
+            "sender": None,
+            "older_than_days": None,
+        }]))
+
+        args = mock_args(json=False, force=False)
+        with pytest.raises(SystemExit):
+            undo_module.cmd_undo(args)
+
+    def test_undo_force_bypasses_staleness(self, tmp_path, monkeypatch, mock_args, capsys):
+        """--force should run the undo even if the entry is older than 30 minutes."""
+        import my_cli.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        stale_ts = (datetime.now() - timedelta(minutes=60)).isoformat()
+        test_log.write_text(json.dumps([{
+            "timestamp": stale_ts,
+            "operation": "batch-delete",
+            "account": "iCloud",
+            "message_ids": [999],
+            "source_mailbox": "INBOX",
+            "dest_mailbox": None,
+            "sender": None,
+            "older_than_days": None,
+        }]))
+
+        mock_run = patch("my_cli.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.return_value = "1"
+            args = mock_args(json=False, force=True)
+            undo_module.cmd_undo(args)
+
+        captured = capsys.readouterr()
+        assert "Undid batch-delete" in captured.out
+
+    def test_undo_stale_message_mentions_age_and_force(self, tmp_path, monkeypatch, mock_args, capsys):
+        """Stale-entry error message should mention minutes and --force."""
+        import my_cli.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        stale_ts = (datetime.now() - timedelta(minutes=45)).isoformat()
+        test_log.write_text(json.dumps([{
+            "timestamp": stale_ts,
+            "operation": "batch-move",
+            "account": "iCloud",
+            "message_ids": [888],
+            "source_mailbox": None,
+            "dest_mailbox": "Archive",
+            "sender": "old@example.com",
+            "older_than_days": None,
+        }]))
+
+        args = mock_args(json=False, force=False)
+        with pytest.raises(SystemExit):
+            undo_module.cmd_undo(args)
+
+        captured = capsys.readouterr()
+        assert "minutes ago" in captured.err
+        assert "--force" in captured.err
+
+    def test_undo_fresh_entry_executes_normally(self, tmp_path, monkeypatch, mock_args, capsys):
+        """Fresh entry (<30 min old) should execute without --force."""
+        import my_cli.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        # Log a fresh operation
+        undo_module.log_batch_operation(
+            operation_type="batch-move",
+            account="iCloud",
+            message_ids=[111],
+            dest_mailbox="Archive",
+            sender="test@example.com",
+        )
+
+        mock_run = patch("my_cli.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.return_value = "1"
+            args = mock_args(json=False, force=False)
+            undo_module.cmd_undo(args)
+
+        captured = capsys.readouterr()
+        assert "Undid batch-move" in captured.out
+
+
+class TestStatsAllAccountsFix:
+    """Regression tests ensuring stats --all (without -a) hits all accounts."""
+
+    @patch("my_cli.commands.mail.analytics.run")
+    def test_stats_all_no_explicit_account_uses_all_accounts_script(self, mock_run, mock_args, capsys):
+        """stats --all without -a must use the all-accounts AppleScript branch."""
+        mock_run.return_value = (
+            f"200{FIELD_SEPARATOR}15\n"
+            f"iCloud{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}100{FIELD_SEPARATOR}10\n"
+            f"Gmail{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}100{FIELD_SEPARATOR}5\n"
+        )
+        # account=None simulates no -a flag
+        args = mock_args(account=None, all=True, json=False, mailbox=None)
+
+        cmd_stats(args)
+
+        # The AppleScript used should iterate every account (all-accounts branch)
+        script_used = mock_run.call_args[0][0]
+        assert "every account" in script_used
+        assert "enabled of acct" in script_used
+
+        captured = capsys.readouterr()
+        assert "All Accounts" in captured.out
+        assert "[iCloud] INBOX" in captured.out
+        assert "[Gmail] INBOX" in captured.out
+
+    @patch("my_cli.commands.mail.analytics.run")
+    def test_stats_all_with_explicit_account_uses_single_account_script(self, mock_run, mock_args, capsys):
+        """stats --all -a ACCOUNT must use the single-account AppleScript branch."""
+        mock_run.return_value = (
+            f"100{FIELD_SEPARATOR}10\n"
+            f"iCloud{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}100{FIELD_SEPARATOR}10\n"
+        )
+        args = mock_args(account="iCloud", all=True, json=False, mailbox=None)
+
+        cmd_stats(args)
+
+        script_used = mock_run.call_args[0][0]
+        # Single-account script targets one account by name, not every account
+        assert 'account "iCloud"' in script_used
+        assert "every account" not in script_used
+
+        captured = capsys.readouterr()
+        assert "Account: iCloud" in captured.out

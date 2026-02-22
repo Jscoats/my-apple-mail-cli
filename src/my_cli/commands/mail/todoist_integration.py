@@ -1,11 +1,13 @@
 """Todoist integration: create tasks from emails."""
 
 import json
+import socket
 import ssl
 import urllib.request
 import urllib.error
 
 from my_cli.config import (
+    APPLESCRIPT_TIMEOUT_SHORT,
     FIELD_SEPARATOR,
     get_config,
 )
@@ -31,6 +33,10 @@ def cmd_to_todoist(args) -> None:
     token = cfg.get("todoist_api_token")
     if not token:
         die("Todoist API token not configured. Add 'todoist_api_token' to ~/.config/my/config.json")
+    # Validate token format before making any network calls (prevents silent hangs
+    # caused by malformed auth headers or non-string token values)
+    if not isinstance(token, str) or not token.strip():
+        die("Todoist API token is invalid. Check 'todoist_api_token' in ~/.config/my/config.json")
 
     ssl_context = ssl.create_default_context()
 
@@ -62,7 +68,7 @@ def cmd_to_todoist(args) -> None:
             method="GET",
         )
         try:
-            with urllib.request.urlopen(projects_req, context=ssl_context) as resp:
+            with urllib.request.urlopen(projects_req, context=ssl_context, timeout=APPLESCRIPT_TIMEOUT_SHORT) as resp:
                 projects = json.loads(resp.read().decode("utf-8"))
             match = next((p for p in projects if p.get("name", "").lower() == project.lower()), None)
             if match is None:
@@ -72,6 +78,8 @@ def cmd_to_todoist(args) -> None:
             die(f"Todoist API error resolving project ({e.code}): {e.read().decode('utf-8')}")
         except urllib.error.URLError as e:
             die(f"Network error resolving project: {e.reason}")
+        except socket.timeout:
+            die(f"Todoist API timed out resolving project (>{APPLESCRIPT_TIMEOUT_SHORT}s). Check your network or try again.")
 
     # Build Todoist task payload
     task_data = {
@@ -98,7 +106,7 @@ def cmd_to_todoist(args) -> None:
     )
 
     try:
-        with urllib.request.urlopen(req, context=ssl_context) as response:
+        with urllib.request.urlopen(req, context=ssl_context, timeout=APPLESCRIPT_TIMEOUT_SHORT) as response:
             response_data = json.loads(response.read().decode("utf-8"))
             task_url = response_data.get("url")
 
@@ -112,6 +120,8 @@ def cmd_to_todoist(args) -> None:
         die(f"Todoist API error ({e.code}): {error_body}")
     except urllib.error.URLError as e:
         die(f"Network error: {e.reason}")
+    except socket.timeout:
+        die(f"Todoist API timed out creating task (>{APPLESCRIPT_TIMEOUT_SHORT}s). Check your network or try again.")
 
 
 # ---------------------------------------------------------------------------

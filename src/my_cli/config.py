@@ -117,7 +117,18 @@ def _save_json(path: str, data: dict) -> None:
             os.chmod(path, 0o600)
 
 
+_config_warned: bool = False
+
+
 def get_config() -> dict:
+    global _config_warned
+    if not _config_warned and not os.path.isfile(CONFIG_FILE):
+        import sys
+        print(
+            "No config found. Run `my mail init` to set up your default account.",
+            file=sys.stderr,
+        )
+        _config_warned = True
     return _load_json(CONFIG_FILE)
 
 

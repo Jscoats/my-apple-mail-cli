@@ -981,3 +981,184 @@ class TestParseMessageLine:
         assert result is not None
         assert result["id"] == 7
         assert result["subject"] == "Subject Only"
+
+
+# ===========================================================================
+# Bug fix: to-todoist timeout and token validation
+# ===========================================================================
+
+class TestTodoistTimeoutAndTokenValidation:
+    """Tests for to-todoist hang fix and token validation."""
+
+    def _make_args(self, **kwargs):
+        defaults = {
+            "json": False,
+            "account": "iCloud",
+            "mailbox": "INBOX",
+            "id": 42,
+            "project": None,
+            "priority": 1,
+            "due": None,
+        }
+        defaults.update(kwargs)
+        return Namespace(**defaults)
+
+    @patch("my_cli.commands.mail.todoist_integration.get_config")
+    def test_empty_string_token_dies(self, mock_config, capsys):
+        """Empty-string token (passes 'if not token' check but is invalid) is caught early."""
+        from my_cli.commands.mail.todoist_integration import cmd_to_todoist
+
+        mock_config.return_value = {"todoist_api_token": "   "}  # whitespace-only
+
+        args = self._make_args()
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_to_todoist(args)
+        assert exc_info.value.code == 1
+        out = capsys.readouterr()
+        assert "invalid" in out.err.lower() or "invalid" in out.out.lower()
+
+    @patch("my_cli.commands.mail.todoist_integration.run")
+    @patch("my_cli.commands.mail.todoist_integration.get_config")
+    @patch("my_cli.commands.mail.todoist_integration.urllib.request.urlopen")
+    def test_socket_timeout_on_task_create_dies(self, mock_urlopen, mock_config, mock_run, capsys):
+        """socket.timeout during task creation produces a clean error (no hang)."""
+        import socket
+        from my_cli.commands.mail.todoist_integration import cmd_to_todoist
+
+        mock_config.return_value = {"todoist_api_token": "fake-token"}
+        mock_run.return_value = (
+            f"Subject{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}Tuesday"
+        )
+        mock_urlopen.side_effect = socket.timeout("timed out")
+
+        args = self._make_args()
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_to_todoist(args)
+        assert exc_info.value.code == 1
+        out = capsys.readouterr()
+        assert "timed out" in out.err.lower() or "timeout" in out.err.lower()
+
+    @patch("my_cli.commands.mail.todoist_integration.run")
+    @patch("my_cli.commands.mail.todoist_integration.get_config")
+    @patch("my_cli.commands.mail.todoist_integration.urllib.request.urlopen")
+    def test_urlopen_has_timeout_kwarg(self, mock_urlopen, mock_config, mock_run, capsys):
+        """urlopen is called with an explicit timeout= kwarg (prevents silent hang)."""
+        from my_cli.commands.mail.todoist_integration import cmd_to_todoist
+        from my_cli.config import APPLESCRIPT_TIMEOUT_SHORT
+
+        mock_config.return_value = {"todoist_api_token": "fake-token"}
+        mock_run.return_value = (
+            f"Subject{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}Tuesday"
+        )
+
+        response_payload = {"id": "t1", "content": "Subject"}
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(response_payload).encode("utf-8")
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+
+        cmd_to_todoist(self._make_args())
+
+        # Every urlopen call must include a timeout kwarg
+        for call in mock_urlopen.call_args_list:
+            assert "timeout" in call.kwargs, "urlopen called without timeout kwarg"
+            assert call.kwargs["timeout"] == APPLESCRIPT_TIMEOUT_SHORT
+
+
+# ===========================================================================
+# Bug fix: not-junk uses subject+sender search, not stale ID
+# ===========================================================================
+
+class TestNotJunkSubjectSenderSearch:
+    """Tests for not-junk search-by-subject+sender fix."""
+
+    def test_try_not_junk_uses_subject_sender_when_provided(self):
+        """_try_not_junk_in_mailbox builds subject+sender AppleScript when args are given."""
+        import subprocess as _subprocess
+        from unittest.mock import patch, MagicMock
+        from my_cli.commands.mail.actions import _try_not_junk_in_mailbox
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Test Subject\n"
+
+        with patch.object(_subprocess, "run", return_value=mock_result) as mock_sp:
+            result = _try_not_junk_in_mailbox(
+                "iCloud", "Junk", "INBOX", 99,
+                subject="Test Subject", sender="sender@example.com"
+            )
+
+        assert result == "Test Subject"
+        # The AppleScript passed to osascript should search by subject+sender, not by ID
+        script = mock_sp.call_args[0][0][2]  # argv[2] is the -e script
+        assert "Test Subject" in script
+        assert "sender@example.com" in script
+        assert "whose id is" not in script  # must NOT fall back to ID search
+
+    def test_try_not_junk_falls_back_to_id_when_no_subject(self):
+        """_try_not_junk_in_mailbox uses ID lookup when subject/sender are empty."""
+        import subprocess as _subprocess
+        from unittest.mock import patch, MagicMock
+        from my_cli.commands.mail.actions import _try_not_junk_in_mailbox
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Some Subject\n"
+
+        with patch.object(_subprocess, "run", return_value=mock_result) as mock_sp:
+            result = _try_not_junk_in_mailbox(
+                "iCloud", "Junk", "INBOX", 42,
+                subject="", sender=""
+            )
+
+        assert result == "Some Subject"
+        script = mock_sp.call_args[0][0][2]
+        assert "whose id is 42" in script
+
+    def test_try_not_junk_returns_none_on_applescript_error(self):
+        """Any AppleScript error returns None (no internal error leaks to user)."""
+        import subprocess as _subprocess
+        from unittest.mock import patch, MagicMock
+        from my_cli.commands.mail.actions import _try_not_junk_in_mailbox
+
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = "Mail got an error: unexpected internal error"
+
+        with patch.object(_subprocess, "run", return_value=mock_result):
+            result = _try_not_junk_in_mailbox(
+                "iCloud", "Junk", "INBOX", 42,
+                subject="Subject", sender="sender@example.com"
+            )
+
+        assert result is None  # error swallowed, not raised
+
+    def test_cmd_not_junk_passes_subject_sender_to_helper(self, monkeypatch, capsys):
+        """cmd_not_junk fetches original subject+sender and passes them to _try_not_junk_in_mailbox."""
+        import subprocess as _subprocess
+        from argparse import Namespace
+        from unittest.mock import MagicMock, patch
+        from my_cli.commands.mail.actions import cmd_not_junk
+        from my_cli.config import FIELD_SEPARATOR
+
+        # Simulate successful fetch of subject+sender from INBOX
+        fetch_result = MagicMock()
+        fetch_result.returncode = 0
+        fetch_result.stdout = f"My Subject{FIELD_SEPARATOR}alice@example.com\n"
+
+        helper_mock = MagicMock(return_value="My Subject")
+
+        with patch.object(_subprocess, "run", return_value=fetch_result):
+            monkeypatch.setattr(
+                "my_cli.commands.mail.actions._try_not_junk_in_mailbox",
+                helper_mock,
+            )
+            args = Namespace(id=100, account="iCloud", mailbox=None, json=False)
+            cmd_not_junk(args)
+
+        # Verify helper was called with subject and sender keyword args
+        call_kwargs = helper_mock.call_args
+        assert call_kwargs.kwargs.get("subject") == "My Subject" or \
+               (len(call_kwargs[1]) > 0 and call_kwargs[1].get("subject") == "My Subject")
+        assert "alice@example.com" in str(call_kwargs)

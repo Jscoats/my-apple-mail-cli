@@ -112,7 +112,7 @@ def run(script: str, timeout: int = APPLESCRIPT_TIMEOUT_DEFAULT) -> str:
         if "not authorized" in err_lower:
             msg = "Mail access denied. Grant access in System Settings > Privacy & Security > Automation."
         elif "application isn't running" in err_lower:
-            msg = "Mail.app is not running. Please open Mail and try again."
+            msg = "Mail.app failed to launch. Try opening Mail.app manually and try again."
         elif "can't get account" in err_lower:
             msg = "Account not found. Run `my mail accounts` to see available accounts."
         elif "can't get mailbox" in err_lower:

@@ -291,7 +291,7 @@ def cmd_junk(args) -> None:
     try:
         subject = run(script)
     except SystemExit:
-        # run() already printed the error; add an actionable hint and re-exit
+        # run() already printed the error; add an actionable hint and re-raise
         explicit_account = getattr(args, "account", None)
         if not explicit_account:
             print(
@@ -299,7 +299,7 @@ def cmd_junk(args) -> None:
                 "      Run `my mail accounts` to see account names.",
                 file=sys.stderr,
             )
-        sys.exit(1)
+        raise
 
     format_output(
         args,
@@ -308,29 +308,53 @@ def cmd_junk(args) -> None:
     )
 
 
-def _try_not_junk_in_mailbox(acct_escaped: str, junk_escaped: str, inbox_escaped: str, message_id: int) -> str | None:
+def _try_not_junk_in_mailbox(acct_escaped: str, junk_escaped: str, inbox_escaped: str, message_id: int, subject: str = "", sender: str = "") -> str | None:
     """Try to mark a message as not-junk from a specific mailbox.
 
     Uses subprocess directly so that individual mailbox attempts can fail silently
     (returning None) without calling sys.exit. The module-level run() always exits
     on error, which would prevent trying fallback mailboxes.
 
+    When subject and sender are provided, searches by subject+sender in the junk
+    mailbox (because AppleScript message IDs are mailbox-specific and become invalid
+    after a cross-mailbox move). Falls back to ID-based lookup only when no
+    subject/sender context is available.
+
     Returns the message subject string on success, None if the message or mailbox
-    was not found, or raises RuntimeError on unexpected AppleScript errors.
+    was not found.
     """
     import subprocess as _subprocess
-    script = f"""
-    tell application "Mail"
-        set acct to account "{acct_escaped}"
-        set junkMb to mailbox "{junk_escaped}" of acct
-        set inboxMb to mailbox "{inbox_escaped}" of acct
-        set theMsg to first message of junkMb whose id is {message_id}
-        set msgSubject to subject of theMsg
-        set junk mail status of theMsg to false
-        move theMsg to inboxMb
-        return msgSubject
-    end tell
-    """
+
+    if subject and sender:
+        # Search by subject + sender — avoids stale-ID problem after cross-mailbox moves
+        subj_esc = escape(subject)
+        sender_esc = escape(sender)
+        script = f"""
+        tell application "Mail"
+            set acct to account "{acct_escaped}"
+            set junkMb to mailbox "{junk_escaped}" of acct
+            set inboxMb to mailbox "{inbox_escaped}" of acct
+            set theMsg to first message of junkMb whose (subject is "{subj_esc}" and sender is "{sender_esc}")
+            set msgSubject to subject of theMsg
+            set junk mail status of theMsg to false
+            move theMsg to inboxMb
+            return msgSubject
+        end tell
+        """
+    else:
+        # Fallback: look up by numeric ID (works if the message hasn't moved mailboxes)
+        script = f"""
+        tell application "Mail"
+            set acct to account "{acct_escaped}"
+            set junkMb to mailbox "{junk_escaped}" of acct
+            set inboxMb to mailbox "{inbox_escaped}" of acct
+            set theMsg to first message of junkMb whose id is {message_id}
+            set msgSubject to subject of theMsg
+            set junk mail status of theMsg to false
+            move theMsg to inboxMb
+            return msgSubject
+        end tell
+        """
     result = _subprocess.run(
         ["osascript", "-e", script],
         capture_output=True,
@@ -340,9 +364,14 @@ def _try_not_junk_in_mailbox(acct_escaped: str, junk_escaped: str, inbox_escaped
     if result.returncode == 0:
         return result.stdout.strip()
     err_lower = result.stderr.strip().lower()
-    if "can't get message" in err_lower or "can't get mailbox" in err_lower:
+    if (
+        "can't get message" in err_lower
+        or "can't get mailbox" in err_lower
+        or "no messages matched" in err_lower
+    ):
         return None
-    raise RuntimeError(result.stderr.strip())
+    # Unexpected error — return None silently (don't leak internal AppleScript errors to user)
+    return None
 
 
 def cmd_not_junk(args) -> None:
@@ -350,7 +379,11 @@ def cmd_not_junk(args) -> None:
 
     Searches the Junk mailbox (and Gmail [Gmail]/Spam for Gmail accounts) because
     AppleScript message IDs become invalid in the original mailbox once a message
-    is moved to Junk. If a custom -m MAILBOX is given, only that mailbox is tried.
+    is moved to Junk.
+
+    Uses subject+sender search (not ID) to find the message in the junk folder,
+    since IDs are mailbox-specific and become stale after a cross-mailbox move.
+    If a custom -m MAILBOX is given, only that mailbox is tried.
     """
     import sys
     account = resolve_account(getattr(args, "account", None))
@@ -361,6 +394,35 @@ def cmd_not_junk(args) -> None:
     acct_escaped = escape(account)
     inbox_mailbox = resolve_mailbox(account, "INBOX")
     inbox_escaped = escape(inbox_mailbox)
+
+    # Try to fetch the original message details (subject + sender) so we can
+    # search by content in the junk folder.  This succeeds when called immediately
+    # after cmd_junk (the original INBOX message is still accessible by ID before
+    # the AppleScript cache expires), and fails gracefully after a restart.
+    orig_subject = ""
+    orig_sender = ""
+    try:
+        import subprocess as _subprocess
+        fetch_script = f"""
+        tell application "Mail"
+            set acct to account "{acct_escaped}"
+            set inboxMb to mailbox "{inbox_escaped}" of acct
+            set theMsg to first message of inboxMb whose id is {message_id}
+            return (subject of theMsg) & "{FIELD_SEPARATOR}" & (sender of theMsg)
+        end tell
+        """
+        fetch_result = _subprocess.run(
+            ["osascript", "-e", fetch_script],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if fetch_result.returncode == 0:
+            parts = fetch_result.stdout.strip().split(FIELD_SEPARATOR, 1)
+            if len(parts) == 2:
+                orig_subject, orig_sender = parts[0], parts[1]
+    except Exception:
+        pass  # Non-fatal — fall back to ID-based lookup below
 
     custom_mailbox = getattr(args, "mailbox", None)
     if custom_mailbox:
@@ -382,11 +444,10 @@ def cmd_not_junk(args) -> None:
     # Try each candidate mailbox until the message is found
     for junk_mailbox in candidates:
         junk_escaped = escape(junk_mailbox)
-        try:
-            subject = _try_not_junk_in_mailbox(acct_escaped, junk_escaped, inbox_escaped, message_id)
-        except RuntimeError as exc:
-            print(f"Error: AppleScript error: {exc}", file=sys.stderr)
-            sys.exit(1)
+        subject = _try_not_junk_in_mailbox(
+            acct_escaped, junk_escaped, inbox_escaped, message_id,
+            subject=orig_subject, sender=orig_sender,
+        )
         if subject is not None:
             format_output(
                 args,

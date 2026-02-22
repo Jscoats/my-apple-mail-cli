@@ -166,7 +166,7 @@ Triage — 15 Unread Messages
 
 ### Integrations
 - `to-todoist` - Send email to Todoist as task
-- `export` - Export messages as markdown
+- `export` - Export messages as markdown (use `--to` for destination path/directory)
 
 ## 🔧 Requirements
 
@@ -174,6 +174,7 @@ Triage — 15 Unread Messages
 - **Python 3.10+**
 - **Mail.app** with at least one configured account
 - **Permissions:** First run will prompt for Mail.app automation permission in System Settings
+- **Note:** Mail.app will be launched automatically if it is not already running — this is normal macOS/AppleScript behavior
 
 ## 💡 Usage Tips
 
@@ -193,6 +194,20 @@ my mail list -a "Personal"
 my mail inbox --json | jq '.accounts[0].unread_count'
 my mail search "invoice" --json | jq '.[].subject'
 ```
+
+### Export Messages
+```bash
+# Export a single message to ~/Documents/mail/
+my mail export 123 --to ~/Documents/mail/ -a "iCloud"
+
+# Bulk export all messages in a mailbox
+my mail export "Work" --to ~/Documents/mail/ -a "Work Email"
+
+# Bulk export messages after a date
+my mail export "INBOX" --to ~/Documents/mail/ -a "iCloud" --after 2026-01-01
+```
+
+Note: The destination flag is `--to` (not `--dest`).
 
 ### Todoist Integration
 ```bash

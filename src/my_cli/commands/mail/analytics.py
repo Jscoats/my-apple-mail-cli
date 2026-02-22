@@ -145,10 +145,15 @@ def cmd_digest(args) -> None:
 def cmd_stats(args) -> None:
     """Show message count and unread count for a mailbox, or account-wide stats with --all."""
     show_all = getattr(args, "all", False)
-    account = resolve_account(getattr(args, "account", None))
+    # For --all, we need to know if the user *explicitly* passed -a, not just the resolved default.
+    # resolve_account() falls back to the configured default (e.g. iCloud), which would cause
+    # --all without -a to incorrectly use the single-account branch.
+    explicit_account = getattr(args, "account", None)
+    account = resolve_account(explicit_account)
 
     if show_all:
-        if account:
+        # Only use the account branch when the user explicitly specified -a.
+        if explicit_account:
             # --all -a ACCOUNT: stats for every mailbox in one account
             acct_escaped = escape(account)
             script = f"""
@@ -196,7 +201,7 @@ def cmd_stats(args) -> None:
         result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
         lines = result.strip().split("\n")
         if not lines:
-            scope = f"account '{account}'" if account else "any account"
+            scope = f"account '{account}'" if explicit_account else "any account"
             format_output(args, f"No mailboxes found in {scope}.",
                           json_data={"mailboxes": []})
             return
@@ -220,13 +225,13 @@ def cmd_stats(args) -> None:
                     "unread": int(parts[3]) if parts[3].isdigit() else 0,
                 })
 
-        # Build text output
-        scope_label = f"Account: {account}" if account else "All Accounts"
+        # Build text output — use explicit_account so resolved defaults don't bleed in.
+        scope_label = f"Account: {account}" if explicit_account else "All Accounts"
         text = f"{scope_label}\n"
         text += f"Total: {grand_total} messages, {grand_unread} unread\n"
         text += f"\nMailboxes ({len(mailboxes)}):"
         for mb in mailboxes:
-            acct_prefix = "" if account else f"[{mb['account']}] "
+            acct_prefix = "" if explicit_account else f"[{mb['account']}] "
             text += f"\n  {acct_prefix}{mb['name']}: {mb['total']} messages, {mb['unread']} unread"
 
         format_output(args, text, json_data={
