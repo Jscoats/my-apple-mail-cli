@@ -4,72 +4,102 @@ These tests focus on the classification logic and data processing,
 not the full AppleScript execution pipeline.
 """
 
-from my_cli.config import FIELD_SEPARATOR
-from my_cli.util.mail_helpers import normalize_subject
+import argparse
+import json
+from unittest.mock import Mock
+
+from my_cli.config import FIELD_SEPARATOR, NOREPLY_PATTERNS
+from my_cli.util.mail_helpers import extract_email, normalize_subject
 
 
 class TestTriageCategorizationLogic:
-    """Test the heuristic categorization logic for triage."""
+    """Test the heuristic categorization logic for triage, using real app code."""
 
-    def test_noreply_pattern_detection(self):
-        """Test detection of automated sender patterns."""
-        noreply_patterns = [
-            "noreply", "no-reply", "notifications", "mailer-daemon",
-            "donotreply", "updates@", "news@", "info@", "support@", "billing@"
+    def test_extract_email_from_display_name_format(self):
+        """extract_email pulls the address from 'Name <addr>' format."""
+        result = extract_email('"John Doe" <john@example.com>')
+        assert result == "john@example.com"
+
+    def test_extract_email_bare_address(self):
+        """extract_email returns a bare address unchanged."""
+        result = extract_email("jane@example.com")
+        assert result == "jane@example.com"
+
+    def test_extract_email_angle_brackets_only(self):
+        """extract_email handles '<addr>' with no display name."""
+        result = extract_email("<admin@site.org>")
+        assert result == "admin@site.org"
+
+    def test_noreply_patterns_match_automated_senders(self):
+        """NOREPLY_PATTERNS from config.py correctly identify automated senders."""
+        automated_emails = [
+            "noreply@example.com",
+            "no-reply@service.com",
+            "notifications@platform.com",
+            "updates@company.com",
+            "billing@service.com",
         ]
-
-        test_cases = {
-            "noreply@example.com": True,
-            "no-reply@service.com": True,
-            "NoReply@Example.Com": True,  # Case insensitive
-            "NOREPLY@EXAMPLE.COM": True,
-            "notifications@platform.com": True,
-            "updates@company.com": True,
-            "billing@service.com": True,
-            "john.doe@company.com": False,
-            "admin@company.com": False,
-            "contact@company.com": False,
-        }
-
-        for sender, expected_is_notification in test_cases.items():
-            is_notification = any(p in sender.lower() for p in noreply_patterns)
-            assert is_notification == expected_is_notification, (
-                f"Sender '{sender}' should be "
-                f"{'notification' if expected_is_notification else 'person'}"
+        for email in automated_emails:
+            matched = any(p in email.lower() for p in NOREPLY_PATTERNS)
+            assert matched, (
+                f"Expected '{email}' to match NOREPLY_PATTERNS but it did not"
             )
 
-    def test_flagged_status_boolean_parsing(self):
-        """Test parsing flagged status from AppleScript output."""
-        assert "true".lower() == "true"
-        assert "false".lower() == "false"
-        assert "True".lower() == "true"
-        assert "FALSE".lower() == "false"
-
-    def test_sender_name_extraction(self):
-        """Test extraction of sender name from full sender field."""
-        # Test the actual logic used in ai.py
-        test_cases = [
-            ('"John Doe" <john@example.com>', "John Doe"),
-            ("jane@example.com", "jane@example.com"),
-            ('"Support Team" <support@company.com>', "Support Team"),
+    def test_noreply_patterns_do_not_match_personal_senders(self):
+        """NOREPLY_PATTERNS should not flag real personal email addresses."""
+        personal_emails = [
+            "john.doe@company.com",
+            "admin@company.com",
+            "contact@company.com",
         ]
+        for email in personal_emails:
+            matched = any(p in email.lower() for p in NOREPLY_PATTERNS)
+            assert not matched, (
+                f"Expected '{email}' NOT to match NOREPLY_PATTERNS but it did"
+            )
 
-        for sender, expected in test_cases:
-            # This is the actual extraction logic used in ai.py
-            if "<" in sender:
-                extracted = sender.split("<")[0].strip().strip('"')
-            else:
-                extracted = sender
-            assert extracted == expected
+    def test_cmd_triage_categorizes_noreply_sender_as_notification(self, monkeypatch, capsys):
+        """cmd_triage places a noreply@ sender into NOTIFICATIONS, not PEOPLE."""
+        from my_cli.commands.mail.ai import cmd_triage
 
-    def test_sender_name_edge_case_no_display_name(self):
-        """Test edge case where sender has angle brackets but no display name."""
-        sender = "<admin@site.org>"
-        # Split gives empty string before '<'
-        extracted = sender.split("<")[0].strip().strip('"')
-        # In real code, this empty string would be used, which is fine
-        # since the UI will show something
-        assert extracted == ""  # This is what actually happens
+        mock_run = Mock(return_value=(
+            f"iCloud{FIELD_SEPARATOR}10{FIELD_SEPARATOR}Your Receipt{FIELD_SEPARATOR}"
+            f"noreply@shop.com{FIELD_SEPARATOR}2026-01-01{FIELD_SEPARATOR}false\n"
+        ))
+        monkeypatch.setattr("my_cli.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "my_cli.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=30, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=False)
+        cmd_triage(args)
+
+        out = capsys.readouterr().out
+        assert "NOTIFICATIONS (1):" in out
+        assert "PEOPLE" not in out
+
+    def test_cmd_triage_categorizes_display_name_noreply_as_notification(self, monkeypatch, capsys):
+        """cmd_triage uses the extracted email address, not the display name, for classification."""
+        from my_cli.commands.mail.ai import cmd_triage
+
+        # Sender has a friendly display name but a no-reply address
+        mock_run = Mock(return_value=(
+            f"iCloud{FIELD_SEPARATOR}11{FIELD_SEPARATOR}Weekly Digest{FIELD_SEPARATOR}"
+            f'"Shop Alerts" <notifications@shop.com>{FIELD_SEPARATOR}2026-01-05{FIELD_SEPARATOR}false\n'
+        ))
+        monkeypatch.setattr("my_cli.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "my_cli.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=30, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=False)
+        cmd_triage(args)
+
+        out = capsys.readouterr().out
+        assert "NOTIFICATIONS (1):" in out
+        assert "PEOPLE" not in out
 
 
 class TestNormalizeSubject:
@@ -213,59 +243,171 @@ class TestStringTruncation:
         assert "..." in truncated
 
 
-class TestDataStructures:
-    """Test data structure handling in AI commands."""
+class TestCmdSummary:
+    """Edge-case tests for cmd_summary that differ from the basic smoke tests in test_commands.py."""
 
-    def test_dict_with_list_values(self):
-        """Test grouping messages into dict with lists."""
-        from collections import defaultdict
+    def test_summary_sender_display_name_extracted(self, monkeypatch, capsys):
+        """cmd_summary strips angle-bracket email addresses, showing only the display name."""
+        from my_cli.commands.mail.ai import cmd_summary
 
-        threads = defaultdict(list)
-        threads["project"].append({"id": 1, "subject": "Project"})
-        threads["project"].append({"id": 2, "subject": "Re: Project"})
-        threads["meeting"].append({"id": 3, "subject": "Meeting"})
+        mock_run = Mock(return_value=(
+            f'iCloud{FIELD_SEPARATOR}200{FIELD_SEPARATOR}Hello{FIELD_SEPARATOR}'
+            f'"Alice Smith" <alice@example.com>{FIELD_SEPARATOR}2026-02-01\n'
+        ))
+        monkeypatch.setattr("my_cli.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "my_cli.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=20, account=None: "tell application \"Mail\"\nend tell",
+        )
 
-        assert len(threads) == 2
-        assert len(threads["project"]) == 2
-        assert len(threads["meeting"]) == 1
+        args = argparse.Namespace(account=None, json=False)
+        cmd_summary(args)
 
-    def test_sorting_by_list_length(self):
-        """Test sorting threads by number of messages."""
-        threads = {
-            "small": [{"id": 1}],
-            "large": [{"id": 2}, {"id": 3}, {"id": 4}],
-            "medium": [{"id": 5}, {"id": 6}],
-        }
+        out = capsys.readouterr().out
+        # Display name should appear, raw angle-bracket form should not
+        assert "Alice Smith" in out
+        assert "<alice@example.com>" not in out
 
-        sorted_threads = sorted(threads.items(), key=lambda x: -len(x[1]))
+    def test_summary_skips_malformed_lines(self, monkeypatch, capsys):
+        """cmd_summary silently skips lines that have fewer than 5 fields."""
+        from my_cli.commands.mail.ai import cmd_summary
 
-        assert sorted_threads[0][0] == "large"
-        assert sorted_threads[1][0] == "medium"
-        assert sorted_threads[2][0] == "small"
+        # One valid line, one malformed (only 2 fields)
+        mock_run = Mock(return_value=(
+            f"iCloud{FIELD_SEPARATOR}99{FIELD_SEPARATOR}Good Subject{FIELD_SEPARATOR}a@b.com{FIELD_SEPARATOR}2026-01-10\n"
+            f"bad-line-no-separators\n"
+        ))
+        monkeypatch.setattr("my_cli.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "my_cli.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=20, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=False)
+        cmd_summary(args)
+
+        out = capsys.readouterr().out
+        # Only the valid message should be counted
+        assert "1 unread:" in out
+        assert "[99]" in out
+
+    def test_summary_json_contains_all_fields(self, monkeypatch, capsys):
+        """cmd_summary JSON output includes account, id, subject, sender, and date fields."""
+        from my_cli.commands.mail.ai import cmd_summary
+
+        mock_run = Mock(return_value=(
+            f"Work{FIELD_SEPARATOR}555{FIELD_SEPARATOR}Quarterly Report{FIELD_SEPARATOR}boss@work.com{FIELD_SEPARATOR}2026-03-15\n"
+        ))
+        monkeypatch.setattr("my_cli.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "my_cli.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=20, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=True)
+        cmd_summary(args)
+
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert len(data) == 1
+        msg = data[0]
+        assert msg["account"] == "Work"
+        assert msg["id"] == 555
+        assert msg["subject"] == "Quarterly Report"
+        assert msg["sender"] == "boss@work.com"
+        assert msg["date"] == "2026-03-15"
 
 
-class TestEmptyInputHandling:
-    """Test handling of empty or missing data."""
+class TestCmdTriage:
+    """Edge-case tests for cmd_triage that differ from the basic smoke tests in test_commands.py."""
 
-    def test_empty_string_split(self):
-        """Test splitting empty string."""
-        result = "".strip().split("\n")
-        # Empty string splits to ['']
-        filtered = [line for line in result if line.strip()]
-        assert len(filtered) == 0
+    def test_triage_all_flagged_shows_no_people_or_notifications(self, monkeypatch, capsys):
+        """When every message is flagged, PEOPLE and NOTIFICATIONS sections are absent."""
+        from my_cli.commands.mail.ai import cmd_triage
 
-    def test_blank_lines_filtered(self):
-        """Test filtering blank lines from output."""
-        output = "line1\n\nline2\n   \nline3"
-        lines = [line for line in output.split("\n") if line.strip()]
+        mock_run = Mock(return_value=(
+            f"iCloud{FIELD_SEPARATOR}1{FIELD_SEPARATOR}Urgent A{FIELD_SEPARATOR}a@a.com{FIELD_SEPARATOR}2026-01-01{FIELD_SEPARATOR}true\n"
+            f"iCloud{FIELD_SEPARATOR}2{FIELD_SEPARATOR}Urgent B{FIELD_SEPARATOR}b@b.com{FIELD_SEPARATOR}2026-01-02{FIELD_SEPARATOR}true\n"
+        ))
+        monkeypatch.setattr("my_cli.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "my_cli.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=30, account=None: "tell application \"Mail\"\nend tell",
+        )
 
-        assert len(lines) == 3
-        assert lines == ["line1", "line2", "line3"]
+        args = argparse.Namespace(account=None, json=False)
+        cmd_triage(args)
 
-    def test_empty_list_handling(self):
-        """Test handling empty message lists."""
-        messages = []
-        count = len(messages)
+        out = capsys.readouterr().out
+        assert "FLAGGED (2):" in out
+        assert "PEOPLE" not in out
+        assert "NOTIFICATIONS" not in out
 
-        assert count == 0
-        # Should handle gracefully without crashing
+    def test_triage_skips_lines_with_fewer_than_six_fields(self, monkeypatch, capsys):
+        """cmd_triage ignores lines that are missing the flagged field (< 6 fields)."""
+        from my_cli.commands.mail.ai import cmd_triage
+
+        # One valid line (6 fields) and one truncated line (5 fields — no flagged status)
+        mock_run = Mock(return_value=(
+            f"iCloud{FIELD_SEPARATOR}10{FIELD_SEPARATOR}Valid{FIELD_SEPARATOR}p@p.com{FIELD_SEPARATOR}2026-01-01{FIELD_SEPARATOR}false\n"
+            f"iCloud{FIELD_SEPARATOR}11{FIELD_SEPARATOR}Truncated{FIELD_SEPARATOR}q@q.com{FIELD_SEPARATOR}2026-01-02\n"
+        ))
+        monkeypatch.setattr("my_cli.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "my_cli.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=30, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=False)
+        cmd_triage(args)
+
+        out = capsys.readouterr().out
+        # Only the 1 valid message should be counted
+        assert "Triage (1 unread):" in out
+
+    def test_triage_json_structure_has_correct_keys(self, monkeypatch, capsys):
+        """cmd_triage JSON output is an object with exactly flagged, people, and notifications keys."""
+        from my_cli.commands.mail.ai import cmd_triage
+
+        mock_run = Mock(return_value=(
+            f"iCloud{FIELD_SEPARATOR}5{FIELD_SEPARATOR}Note{FIELD_SEPARATOR}friend@ex.com{FIELD_SEPARATOR}2026-01-01{FIELD_SEPARATOR}false\n"
+        ))
+        monkeypatch.setattr("my_cli.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "my_cli.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=30, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=True)
+        cmd_triage(args)
+
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert set(data.keys()) == {"flagged", "people", "notifications"}
+        assert isinstance(data["flagged"], list)
+        assert isinstance(data["people"], list)
+        assert isinstance(data["notifications"], list)
+
+    def test_triage_json_message_has_flagged_field(self, monkeypatch, capsys):
+        """Each message dict in triage JSON output includes a boolean 'flagged' field."""
+        from my_cli.commands.mail.ai import cmd_triage
+
+        mock_run = Mock(return_value=(
+            f"iCloud{FIELD_SEPARATOR}7{FIELD_SEPARATOR}Important{FIELD_SEPARATOR}boss@co.com{FIELD_SEPARATOR}2026-02-10{FIELD_SEPARATOR}true\n"
+        ))
+        monkeypatch.setattr("my_cli.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "my_cli.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=30, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=True)
+        cmd_triage(args)
+
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert len(data["flagged"]) == 1
+        msg = data["flagged"][0]
+        assert msg["flagged"] is True
+        assert msg["id"] == 7
+        assert msg["subject"] == "Important"

@@ -7,11 +7,12 @@ from my_cli.config import (
     DEFAULT_MAILBOX,
     APPLESCRIPT_TIMEOUT_LONG,
     FIELD_SEPARATOR,
+    MAX_MESSAGES_BATCH,
     NOREPLY_PATTERNS,
     RECORD_SEPARATOR,
     resolve_account,
 )
-from my_cli.util.applescript import escape, run
+from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.applescript_templates import inbox_iterator_all_accounts
 from my_cli.util.formatting import die, format_output, truncate
 from my_cli.util.mail_helpers import extract_email, normalize_subject
@@ -28,7 +29,7 @@ def cmd_summary(args) -> None:
 
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
-        format_output(args,"No unread messages.")
+        format_output(args, "No unread messages.")
         return
 
     messages = []
@@ -68,7 +69,7 @@ def cmd_triage(args) -> None:
 
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
-        format_output(args,"No unread messages. Inbox zero!")
+        format_output(args, "No unread messages. Inbox zero!")
         return
 
     flagged = []
@@ -132,8 +133,8 @@ def cmd_context(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = args.id
-    limit = getattr(args, "limit", 50)
+    message_id = validate_msg_id(args.id)
+    limit = max(1, min(getattr(args, "limit", 50), MAX_MESSAGES_BATCH))
     all_accounts = getattr(args, "all_accounts", False)
 
     acct_escaped = escape(account)
@@ -297,7 +298,7 @@ def cmd_find_related(args) -> None:
 
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
-        format_output(args,f"No messages found matching '{query}'.")
+        format_output(args, f"No messages found matching '{query}'.")
         return
 
     # Group by normalized subject (thread)

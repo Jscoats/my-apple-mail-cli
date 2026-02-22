@@ -1,5 +1,6 @@
 """Batch mail operations: batch-read, batch-flag, batch-move, batch-delete."""
 
+import sys
 from datetime import datetime, timedelta
 
 from my_cli.config import (
@@ -47,6 +48,7 @@ def cmd_batch_read(args) -> None:
     count = int(result) if result.isdigit() else 0
     format_output(args, f"Marked {count} messages as read in {mailbox} [{account}].",
                   json_data={"mailbox": mailbox, "account": account, "marked_read": count})
+    print("Note: This operation cannot be undone via 'my mail undo'.", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +85,7 @@ def cmd_batch_flag(args) -> None:
     count = int(result) if result.isdigit() else 0
     format_output(args, f"Flagged {count} messages from '{sender}' in account '{account}'.",
                   json_data={"sender": sender, "account": account, "flagged": count})
+    print("Note: This operation cannot be undone via 'my mail undo'.", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------

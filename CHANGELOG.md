@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `NOREPLY_PATTERNS` centralized in `config.py` — single source of truth used by `triage`, `process-inbox`, `clean-newsletters`, and `weekly-review`
 - `TEMPLATES_FILE` path centralized in `config.py` — imported by `templates.py` and `compose.py`
 - File locking (`_file_lock`) applied to all JSON state reads and writes — `config.json`, `state.json`, `mail-undo.json`, `mail-templates.json`
-- 21 new tests covering templates CRUD, draft error paths, and batch dry-run edge cases (196 total)
+- 30 new tests covering templates CRUD, draft error paths, and batch dry-run edge cases (196 total)
 
 ### Fixed
 
@@ -51,7 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Message operations** — `list`, `read`, `search`, `mark-read`, `mark-unread`, `flag`, `unflag`, `move`, `delete`, `open` for GUI access
 - **AI-powered features** — `summary`, `triage`, `context`, `find-related`, `process-inbox`
 - **Batch operations with undo** — `batch-read`, `batch-flag`, `batch-move`, `batch-delete`, `undo`
-- **Analytics** — `stats`, `top-senders`, `digest`, `show-flagged`, `weekly-review`, `clean-newsletters`
+- **Analytics** — `stats`, `digest`, `show-flagged`, `weekly-review`, `clean-newsletters`
 - **Compose & templates** — `draft` with template support, `reply`, `forward`, `templates` subcommands
 - **Integrations** — `to-todoist` for sending emails as Todoist tasks, `export` for Mbox format
 - **System tools** — `check`, `headers`, `rules`, `junk`, `not-junk`

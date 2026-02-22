@@ -2,6 +2,7 @@
 
 import json
 import ssl
+import sys
 import urllib.request
 import urllib.error
 
@@ -9,7 +10,7 @@ from my_cli.config import (
     FIELD_SEPARATOR,
     get_config,
 )
-from my_cli.util.applescript import run
+from my_cli.util.applescript import run, validate_msg_id
 from my_cli.util.formatting import die, format_output
 from my_cli.util.mail_helpers import resolve_message_context
 
@@ -21,7 +22,7 @@ from my_cli.util.mail_helpers import resolve_message_context
 def cmd_to_todoist(args) -> None:
     """Create a Todoist task from an email."""
     account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     project = getattr(args, "project", None)
     priority = getattr(args, "priority", 1)
     due = getattr(args, "due", None)
@@ -58,7 +59,15 @@ def cmd_to_todoist(args) -> None:
         "priority": priority,
     }
     if project:
-        task_data["project_name"] = project
+        # The Todoist REST API v2 does not accept a `project_name` field for task
+        # creation — it only supports `project_id`. Resolving a name to an ID would
+        # require an additional API call and error handling, so project assignment by
+        # name is not currently implemented.  The task will be created in the Inbox.
+        print(
+            f"Warning: --project is not currently supported by the Todoist REST API v2. "
+            f"The task will be created in the Inbox (project '{project}' ignored).",
+            file=sys.stderr,
+        )
     if due:
         task_data["due_string"] = due
 
@@ -75,8 +84,7 @@ def cmd_to_todoist(args) -> None:
         method="POST"
     )
 
-    # Use macOS cert bundle for SSL verification
-    ssl_context = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
+    ssl_context = ssl.create_default_context()
 
     try:
         with urllib.request.urlopen(req, context=ssl_context) as response:
@@ -105,7 +113,7 @@ def register(subparsers) -> None:
     p.add_argument("id", type=int, help="Message ID")
     p.add_argument("-a", "--account", help="Mail account name")
     p.add_argument("-m", "--mailbox", help="Mailbox name (default: INBOX)")
-    p.add_argument("--project", help="Todoist project name")
+    p.add_argument("--project", help="Todoist project name (not currently functional — project assignment by name is not supported by the API; task will be created in Inbox)")
     p.add_argument("--priority", type=int, choices=[1, 2, 3, 4], default=1, help="Priority (1-4, 4=highest)")
     p.add_argument("--due", help="Due date (natural language, e.g. 'tomorrow')")
     p.add_argument("--json", action="store_true", help="Output as JSON")

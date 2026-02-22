@@ -5,6 +5,7 @@ Common patterns extracted from command modules:
 2. Message iteration with cap/limit
 3. Single message lookup by ID
 4. Field output assembly with separators
+5. All-mailboxes iteration across one or all accounts
 
 Each template function returns a complete AppleScript string.
 Use FIELD_SEPARATOR from config.py in the templates.
@@ -99,6 +100,54 @@ def set_message_property(
         set theMsg to first message of mb whose id is {message_id}
         set {property_name} of theMsg to {property_value}
         return subject of theMsg
+    end tell
+    """
+
+
+def mailbox_iterator(inner_operations: str, account: str | None = None) -> str:
+    """Generate AppleScript to iterate over every mailbox in one or all accounts.
+
+    Unlike inbox_iterator_all_accounts (which only looks at the INBOX mailbox),
+    this iterates over ALL mailboxes of the account(s).  Useful for whole-account
+    scans such as flagged-message or attachment searches.
+
+    Args:
+        inner_operations: AppleScript code to execute inside each mailbox.
+                         Available variables: mb (mailbox), acct (account)
+        account: If provided, scope iteration to this single (already-escaped)
+                 account name string, e.g. ``escape(account)``
+
+    Returns:
+        Complete AppleScript string
+
+    Example:
+        inner_ops = (
+            'set flaggedMsgs to (every message of mb whose flagged status is true)\\n'
+            'repeat with m in flaggedMsgs\\n'
+            '    set output to output & (id of m) & linefeed\\n'
+            'end repeat'
+        )
+        script = mailbox_iterator(inner_ops, account="iCloud")
+        script = mailbox_iterator(inner_ops)  # all accounts
+    """
+    if account:
+        acct_block = f'set acct to account "{account}"\n        repeat with mb in (every mailbox of acct)\n            {inner_operations}\n        end repeat'
+    else:
+        acct_block = (
+            "repeat with acct in (every account)\n"
+            "            if enabled of acct then\n"
+            f"                repeat with mb in (every mailbox of acct)\n"
+            f"                    {inner_operations}\n"
+            "                end repeat\n"
+            "            end if\n"
+            "        end repeat"
+        )
+
+    return f"""
+    tell application "Mail"
+        set output to ""
+        {acct_block}
+        return output
     end tell
     """
 

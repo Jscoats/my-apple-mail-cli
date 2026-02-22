@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-from my_cli.commands.mail.manage import cmd_empty_trash
+from my_cli.commands.mail.manage import cmd_empty_trash, cmd_create_mailbox, cmd_delete_mailbox
 
 
 def test_cmd_empty_trash_single_account(monkeypatch, capsys):
@@ -212,3 +212,69 @@ def test_cmd_empty_trash_applescript_error_handling(monkeypatch, capsys):
     # Should treat error as count=0 and report already empty
     captured = capsys.readouterr()
     assert "Trash is already empty for 'iCloud'" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# cmd_create_mailbox
+# ---------------------------------------------------------------------------
+
+def test_cmd_create_mailbox_success(monkeypatch, capsys):
+    """Test create-mailbox calls run() and reports creation."""
+    monkeypatch.setattr("my_cli.commands.mail.manage.resolve_account", lambda _: "iCloud")
+
+    mock_run = Mock(return_value="created")
+    monkeypatch.setattr("my_cli.commands.mail.manage.run", mock_run)
+
+    args = Namespace(account="iCloud", name="MyProject", json=False)
+    cmd_create_mailbox(args)
+
+    # run() should have been called once with the create script
+    assert mock_run.call_count == 1
+    script = mock_run.call_args[0][0]
+    assert "make new mailbox" in script
+    assert "MyProject" in script
+
+    captured = capsys.readouterr()
+    assert "MyProject" in captured.out
+    assert "created" in captured.out.lower()
+
+
+def test_cmd_create_mailbox_no_account_dies(monkeypatch):
+    """Test create-mailbox exits when no account is resolved."""
+    monkeypatch.setattr("my_cli.commands.mail.manage.resolve_account", lambda _: None)
+
+    args = Namespace(account=None, name="MyProject", json=False)
+    with pytest.raises(SystemExit):
+        cmd_create_mailbox(args)
+
+
+# ---------------------------------------------------------------------------
+# cmd_delete_mailbox
+# ---------------------------------------------------------------------------
+
+def test_cmd_delete_mailbox_without_force_dies(monkeypatch):
+    """Test delete-mailbox exits without --force flag."""
+    monkeypatch.setattr("my_cli.commands.mail.manage.resolve_account", lambda _: "iCloud")
+
+    args = Namespace(account="iCloud", name="OldMailbox", force=False, json=False)
+    with pytest.raises(SystemExit):
+        cmd_delete_mailbox(args)
+
+
+def test_cmd_delete_mailbox_with_force_proceeds(monkeypatch, capsys):
+    """Test delete-mailbox proceeds and calls run() when --force is given."""
+    monkeypatch.setattr("my_cli.commands.mail.manage.resolve_account", lambda _: "iCloud")
+
+    # First call returns count, second call performs the delete
+    mock_run = Mock(side_effect=["3", "deleted"])
+    monkeypatch.setattr("my_cli.commands.mail.manage.run", mock_run)
+
+    args = Namespace(account="iCloud", name="OldMailbox", force=True, json=False)
+    cmd_delete_mailbox(args)
+
+    # run() should have been called twice (count + delete)
+    assert mock_run.call_count == 2
+
+    captured = capsys.readouterr()
+    assert "OldMailbox" in captured.out
+    assert "deleted" in captured.out.lower()

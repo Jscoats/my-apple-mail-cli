@@ -5,6 +5,7 @@ import subprocess
 from my_cli.config import resolve_account
 from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import die, format_output
+from my_cli.util.mail_helpers import resolve_mailbox
 
 
 def cmd_create_mailbox(args) -> None:
@@ -39,6 +40,9 @@ def cmd_delete_mailbox(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     name = args.name
+
+    if not getattr(args, "force", False):
+        die(f"Deleting mailbox '{name}' is permanent and cannot be undone. Re-run with --force to confirm.")
 
     acct_escaped = escape(account)
     mb_escaped = escape(name)
@@ -96,10 +100,12 @@ def cmd_empty_trash(args) -> None:
     # Count messages before erase so we can report it
     if not all_accounts:
         acct_escaped = escape(account)
+        trash_mb = resolve_mailbox(account, "Trash")
+        trash_mb_escaped = escape(trash_mb)
         count_script = f"""
         tell application "Mail"
             set acct to account "{acct_escaped}"
-            set trashMb to mailbox "Deleted Messages" of acct
+            set trashMb to mailbox "{trash_mb_escaped}" of acct
             return count of messages of trashMb
         end tell
         """
@@ -168,6 +174,7 @@ def register(subparsers) -> None:
     p = subparsers.add_parser("delete-mailbox", help="Delete a mailbox (and all messages)")
     p.add_argument("name", help="Mailbox name")
     p.add_argument("-a", "--account", help="Mail account name")
+    p.add_argument("--force", action="store_true", help="Confirm permanent deletion (required)")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_delete_mailbox)
 

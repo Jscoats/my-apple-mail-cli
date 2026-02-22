@@ -212,3 +212,72 @@ class TestBatchDelete:
         )
         with pytest.raises(SystemExit):
             cmd_batch_delete(args)
+
+
+class TestCmdUndo:
+    """Smoke tests for cmd_undo execution."""
+
+    def test_undo_batch_move_calls_run_with_move_script(self, tmp_path, monkeypatch, mock_args, capsys):
+        """Test that cmd_undo for batch-move calls run() with a script that moves messages back."""
+        import my_cli.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        # Seed one batch-move operation
+        undo_module.log_batch_operation(
+            operation_type="batch-move",
+            account="iCloud",
+            message_ids=[101, 102],
+            dest_mailbox="Archive",
+            sender="sender@example.com",
+        )
+
+        mock_run = patch("my_cli.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.return_value = "2"
+            args = mock_args(json=False)
+            undo_module.cmd_undo(args)
+
+        # Verify run() was called and the script moves messages back to INBOX
+        assert mocked.call_count == 1
+        script_called = mocked.call_args[0][0]
+        assert "move" in script_called.lower()
+        assert "Archive" in script_called or "archive" in script_called.lower()
+        assert "INBOX" in script_called
+
+        captured = capsys.readouterr()
+        assert "Undid batch-move" in captured.out
+        assert "2/2" in captured.out
+
+    def test_undo_batch_delete_restores_from_trash(self, tmp_path, monkeypatch, mock_args, capsys):
+        """Test that cmd_undo for batch-delete moves messages from Trash back to source."""
+        import my_cli.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        # Seed one batch-delete operation
+        undo_module.log_batch_operation(
+            operation_type="batch-delete",
+            account="iCloud",
+            message_ids=[201, 202, 203],
+            source_mailbox="INBOX",
+            sender="deleted@example.com",
+        )
+
+        mock_run = patch("my_cli.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.return_value = "3"
+            args = mock_args(json=False)
+            undo_module.cmd_undo(args)
+
+        # Verify run() was called with a script referencing Trash
+        assert mocked.call_count == 1
+        script_called = mocked.call_args[0][0]
+        assert "Trash" in script_called
+        assert "move" in script_called.lower()
+
+        captured = capsys.readouterr()
+        assert "Undid batch-delete" in captured.out
+        assert "3/3" in captured.out

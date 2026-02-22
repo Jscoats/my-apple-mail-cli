@@ -10,26 +10,34 @@ from my_cli.config import (
     MAX_MESSAGES_BATCH,
     NOREPLY_PATTERNS,
     resolve_account,
+    validate_limit,
 )
 from my_cli.util.applescript import escape, run
+from my_cli.util.applescript_templates import mailbox_iterator
 from my_cli.util.dates import to_applescript_date
 from my_cli.util.formatting import format_output, truncate
 from my_cli.util.mail_helpers import extract_email
 
 
 # ---------------------------------------------------------------------------
-# process-inbox — categorize unread messages and suggest actions
+# Private helpers — AppleScript builders
 # ---------------------------------------------------------------------------
 
-def cmd_process_inbox(args) -> None:
-    """Read-only diagnostic: categorize unread messages and output action plan."""
-    account = resolve_account(getattr(args, "account", None))
-    limit = getattr(args, "limit", 50)
+def _build_process_inbox_script(account: str | None, limit: int) -> str:
+    """Return an AppleScript that scans INBOX(es) for unread messages.
 
-    # Build AppleScript to scan INBOX(es)
+    When *account* is given, only that account's INBOX is scanned.
+    Otherwise all enabled accounts are scanned up to *limit* total messages.
+    Output rows: acctName|id|subject|sender|date|flagged
+    """
+    msg_row = (
+        f'set output to output & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}"'
+        f' & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}"'
+        f' & (date received of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & linefeed'
+    )
     if account:
         acct_escaped = escape(account)
-        script = f"""
+        return f"""
         tell application "Mail"
             set output to ""
             set totalFound to 0
@@ -44,7 +52,7 @@ def cmd_process_inbox(args) -> None:
                             if (count of unreadMsgs) < cap then set cap to (count of unreadMsgs)
                             repeat with j from 1 to cap
                                 set m to item j of unreadMsgs
-                                set output to output & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & linefeed
+                                {msg_row}
                                 set totalFound to totalFound + 1
                             end repeat
                         end try
@@ -55,9 +63,8 @@ def cmd_process_inbox(args) -> None:
             return output
         end tell
         """
-    else:
-        # Scan all enabled accounts
-        script = f"""
+    # All enabled accounts — honour the global limit across accounts
+    return f"""
         tell application "Mail"
             set output to ""
             set totalFound to 0
@@ -74,7 +81,7 @@ def cmd_process_inbox(args) -> None:
                                 if (count of unreadMsgs) < cap then set cap to (count of unreadMsgs)
                                 repeat with j from 1 to cap
                                     set m to item j of unreadMsgs
-                                    set output to output & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & linefeed
+                                    {msg_row}
                                     set totalFound to totalFound + 1
                                 end repeat
                             end try
@@ -87,6 +94,77 @@ def cmd_process_inbox(args) -> None:
         end tell
         """
 
+
+def _build_newsletters_script(account: str | None, mailbox: str, limit: int) -> str:
+    """Return an AppleScript that collects sender/read-status rows from a mailbox.
+
+    When *account* is given, only that account's named mailbox is scanned.
+    Otherwise all enabled accounts are scanned up to *limit* total messages.
+    Output rows: sender|read_status
+    """
+    msg_row = (
+        f'set output to output & (sender of m) & "{FIELD_SEPARATOR}" & (read status of m) & linefeed'
+    )
+    if account:
+        acct_escaped = escape(account)
+        mb_escaped = escape(mailbox)
+        return f"""
+        tell application "Mail"
+            set mb to mailbox "{mb_escaped}" of account "{acct_escaped}"
+            set allMsgs to (every message of mb)
+            set msgCount to count of allMsgs
+            set cap to {limit}
+            if msgCount < cap then set cap to msgCount
+            set output to ""
+            repeat with i from 1 to cap
+                set m to item i of allMsgs
+                {msg_row}
+            end repeat
+            return output
+        end tell
+        """
+    # All enabled accounts — honour the global limit across accounts
+    return f"""
+        tell application "Mail"
+            set output to ""
+            set totalFound to 0
+            repeat with acct in (every account)
+                if enabled of acct then
+                    repeat with mbox in (mailboxes of acct)
+                        if name of mbox is "{DEFAULT_MAILBOX}" then
+                            try
+                                set allMsgs to (every message of mbox)
+                                set msgCount to count of allMsgs
+                                set cap to {limit}
+                                if msgCount < cap then set cap to msgCount
+                                repeat with i from 1 to cap
+                                    set m to item i of allMsgs
+                                    {msg_row}
+                                    set totalFound to totalFound + 1
+                                    if totalFound >= {limit} then exit repeat
+                                end repeat
+                            end try
+                            exit repeat
+                        end if
+                    end repeat
+                    if totalFound >= {limit} then exit repeat
+                end if
+            end repeat
+            return output
+        end tell
+        """
+
+
+# ---------------------------------------------------------------------------
+# process-inbox — categorize unread messages and suggest actions
+# ---------------------------------------------------------------------------
+
+def cmd_process_inbox(args) -> None:
+    """Read-only diagnostic: categorize unread messages and output action plan."""
+    account = resolve_account(getattr(args, "account", None))
+    limit = validate_limit(getattr(args, "limit", 50))
+
+    script = _build_process_inbox_script(account, limit)
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
         format_output(args, "No unread messages found.")
@@ -173,59 +251,9 @@ def cmd_clean_newsletters(args) -> None:
     """Identify likely newsletter senders and suggest batch-move commands."""
     account = resolve_account(getattr(args, "account", None))
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    limit = getattr(args, "limit", 200)
+    limit = max(1, min(getattr(args, "limit", 200), MAX_MESSAGES_BATCH))
 
-    if account:
-        acct_escaped = escape(account)
-        mb_escaped = escape(mailbox)
-
-        script = f"""
-        tell application "Mail"
-            set mb to mailbox "{mb_escaped}" of account "{acct_escaped}"
-            set allMsgs to (every message of mb)
-            set msgCount to count of allMsgs
-            set cap to {limit}
-            if msgCount < cap then set cap to msgCount
-            set output to ""
-            repeat with i from 1 to cap
-                set m to item i of allMsgs
-                set output to output & (sender of m) & "{FIELD_SEPARATOR}" & (read status of m) & linefeed
-            end repeat
-            return output
-        end tell
-        """
-    else:
-        # Scan all enabled accounts
-        script = f"""
-        tell application "Mail"
-            set output to ""
-            set totalFound to 0
-            repeat with acct in (every account)
-                if enabled of acct then
-                    repeat with mbox in (mailboxes of acct)
-                        if name of mbox is "{DEFAULT_MAILBOX}" then
-                            try
-                                set allMsgs to (every message of mbox)
-                                set msgCount to count of allMsgs
-                                set cap to {limit}
-                                if msgCount < cap then set cap to msgCount
-                                repeat with i from 1 to cap
-                                    set m to item i of allMsgs
-                                    set output to output & (sender of m) & "{FIELD_SEPARATOR}" & (read status of m) & linefeed
-                                    set totalFound to totalFound + 1
-                                    if totalFound >= {limit} then exit repeat
-                                end repeat
-                            end try
-                            exit repeat
-                        end if
-                    end repeat
-                    if totalFound >= {limit} then exit repeat
-                end if
-            end repeat
-            return output
-        end tell
-        """
-
+    script = _build_newsletters_script(account, mailbox, limit)
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
         scope = f"in {mailbox} [{account}]" if account else "in INBOX across all accounts"
@@ -296,125 +324,45 @@ def cmd_weekly_review(args) -> None:
     since_dt = datetime.now() - timedelta(days=days)
     since_as = to_applescript_date(since_dt)
 
-    if account:
-        acct_escaped = escape(account)
+    # Pass the already-escaped account name to mailbox_iterator (or None for all accounts).
+    acct_escaped = escape(account) if account else None
 
-        # Category 1: Flagged messages (all, not date-filtered)
-        flagged_script = f"""
-        tell application "Mail"
-            set acct to account "{acct_escaped}"
-            set output to ""
-            repeat with mb in (every mailbox of acct)
-                set flaggedMsgs to (every message of mb whose flagged status is true)
-                repeat with m in flaggedMsgs
-                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
-                end repeat
-            end repeat
-            return output
-        end tell
-        """
+    # Category 1: Flagged messages (all mailboxes, not date-filtered)
+    flagged_inner = (
+        f'set flaggedMsgs to (every message of mb whose flagged status is true)\n'
+        f'                repeat with m in flaggedMsgs\n'
+        f'                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed\n'
+        f'                end repeat'
+    )
+    flagged_script = mailbox_iterator(flagged_inner, account=acct_escaped)
 
-        # Category 2: Messages with attachments from last N days
-        attachments_script = f"""
-        tell application "Mail"
-            set acct to account "{acct_escaped}"
-            set output to ""
-            repeat with mb in (every mailbox of acct)
-                set msgs to (every message of mb whose date received >= date "{since_as}")
-                set msgCount to count of msgs
-                set cap to {MAX_MESSAGES_BATCH}
-                if msgCount < cap then set cap to msgCount
-                repeat with i from 1 to cap
-                    set m to item i of msgs
-                    if (count of mail attachments of m) > 0 then
-                        set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (count of mail attachments of m) & linefeed
-                    end if
-                end repeat
-            end repeat
-            return output
-        end tell
-        """
+    # Category 2: Messages with attachments from last N days
+    attachments_inner = (
+        f'set msgs to (every message of mb whose date received >= date "{since_as}")\n'
+        f'                set msgCount to count of msgs\n'
+        f'                set cap to {MAX_MESSAGES_BATCH}\n'
+        f'                if msgCount < cap then set cap to msgCount\n'
+        f'                repeat with i from 1 to cap\n'
+        f'                    set m to item i of msgs\n'
+        f'                    if (count of mail attachments of m) > 0 then\n'
+        f'                        set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (count of mail attachments of m) & linefeed\n'
+        f'                    end if\n'
+        f'                end repeat'
+    )
+    attachments_script = mailbox_iterator(attachments_inner, account=acct_escaped)
 
-        # Category 3: Unreplied messages from people (last N days, sender NOT in noreply patterns)
-        unreplied_script = f"""
-        tell application "Mail"
-            set acct to account "{acct_escaped}"
-            set output to ""
-            repeat with mb in (every mailbox of acct)
-                set msgs to (every message of mb whose date received >= date "{since_as}" and was replied to is false)
-                set msgCount to count of msgs
-                set cap to {MAX_MESSAGES_BATCH}
-                if msgCount < cap then set cap to msgCount
-                repeat with i from 1 to cap
-                    set m to item i of msgs
-                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
-                end repeat
-            end repeat
-            return output
-        end tell
-        """
-    else:
-        # Scan all enabled accounts
-        flagged_script = f"""
-        tell application "Mail"
-            set output to ""
-            repeat with acct in (every account)
-                if enabled of acct then
-                    repeat with mb in (every mailbox of acct)
-                        set flaggedMsgs to (every message of mb whose flagged status is true)
-                        repeat with m in flaggedMsgs
-                            set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
-                        end repeat
-                    end repeat
-                end if
-            end repeat
-            return output
-        end tell
-        """
-
-        attachments_script = f"""
-        tell application "Mail"
-            set output to ""
-            repeat with acct in (every account)
-                if enabled of acct then
-                    repeat with mb in (every mailbox of acct)
-                        set msgs to (every message of mb whose date received >= date "{since_as}")
-                        set msgCount to count of msgs
-                        set cap to {MAX_MESSAGES_BATCH}
-                        if msgCount < cap then set cap to msgCount
-                        repeat with i from 1 to cap
-                            set m to item i of msgs
-                            if (count of mail attachments of m) > 0 then
-                                set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (count of mail attachments of m) & linefeed
-                            end if
-                        end repeat
-                    end repeat
-                end if
-            end repeat
-            return output
-        end tell
-        """
-
-        unreplied_script = f"""
-        tell application "Mail"
-            set output to ""
-            repeat with acct in (every account)
-                if enabled of acct then
-                    repeat with mb in (every mailbox of acct)
-                        set msgs to (every message of mb whose date received >= date "{since_as}" and was replied to is false)
-                        set msgCount to count of msgs
-                        set cap to {MAX_MESSAGES_BATCH}
-                        if msgCount < cap then set cap to msgCount
-                        repeat with i from 1 to cap
-                            set m to item i of msgs
-                            set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed
-                        end repeat
-                    end repeat
-                end if
-            end repeat
-            return output
-        end tell
-        """
+    # Category 3: Unreplied messages from people (last N days, not yet replied to)
+    unreplied_inner = (
+        f'set msgs to (every message of mb whose date received >= date "{since_as}" and was replied to is false)\n'
+        f'                set msgCount to count of msgs\n'
+        f'                set cap to {MAX_MESSAGES_BATCH}\n'
+        f'                if msgCount < cap then set cap to msgCount\n'
+        f'                repeat with i from 1 to cap\n'
+        f'                    set m to item i of msgs\n'
+        f'                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed\n'
+        f'                end repeat'
+    )
+    unreplied_script = mailbox_iterator(unreplied_inner, account=acct_escaped)
 
     # Execute all three queries
     flagged_result = run(flagged_script, timeout=APPLESCRIPT_TIMEOUT_LONG)

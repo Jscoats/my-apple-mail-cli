@@ -95,7 +95,7 @@ my mail to-todoist 123 --project Work
 - `batch-read` - Mark all unread as read
 - `batch-flag` - Flag all from sender
 - `batch-move` - Move messages by sender
-- `batch-delete` - Delete messages older than N days
+- `batch-delete` - Delete messages by sender and/or age
 - `undo`, `undo --list` - Rollback batch operations
 
 ### Analytics & Tools
@@ -115,14 +115,15 @@ my mail to-todoist 123 --project Work
 - `draft` - Create email draft (supports templates)
 - `templates list/create/show/delete` - Manage email templates
 - `reply`, `forward` - Create response drafts
+- `thread` - Show full conversation thread for a message
 
 ### Integrations
 - `to-todoist` - Send email to Todoist as task
-- `export` - Export messages to Mbox format
+- `export` - Export messages as markdown
 
 ## 🔧 Requirements
 
-- **macOS** (uses AppleScript to communicate with Mail.app)
+- **macOS 12 or later** (uses AppleScript to communicate with Mail.app)
 - **Python 3.10+**
 - **Mail.app** with at least one configured account
 - **Permissions:** First run will prompt for Mail.app automation permission in System Settings
@@ -203,7 +204,7 @@ The CLI is the bridge between Mail.app and whatever tools you use — AI, script
 
 Built with modern Python patterns:
 - **Zero runtime dependencies** (stdlib only)
-- **Comprehensive test suite** (196 tests across 17 test files)
+- **Comprehensive test suite** (292 tests across 17 test files)
 - **Modular command structure** (16 focused modules)
 - **AppleScript bridge** for Mail.app communication
 - **Three-tier account resolution** (explicit flag → config default → last-used)

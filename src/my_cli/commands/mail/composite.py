@@ -13,7 +13,7 @@ from my_cli.config import (
     RECORD_SEPARATOR,
     resolve_account,
 )
-from my_cli.util.applescript import escape, run
+from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.formatting import die, format_output, truncate
 from my_cli.util.mail_helpers import extract_email, normalize_subject
 
@@ -155,7 +155,7 @@ def cmd_thread(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     limit = getattr(args, "limit", 100)
     all_accounts = getattr(args, "all_accounts", False)
 
@@ -242,7 +242,7 @@ def cmd_reply(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     body = args.body
 
     acct_escaped = escape(account)
@@ -271,6 +271,8 @@ def cmd_reply(args) -> None:
     reply_subject = orig_subject if orig_subject.lower().startswith("re:") else f"Re: {orig_subject}"
     # Extract email from sender
     reply_to = extract_email(orig_sender)
+    if not reply_to or "@" not in reply_to:
+        die(f"Cannot determine reply address from sender: '{orig_sender}'")
 
     # Build reply body with quote
     quoted = "\n".join(f"> {line}" for line in orig_content.split("\n")[:20])
@@ -309,7 +311,7 @@ def cmd_forward(args) -> None:
     if not account:
         die("Account required. Use -a ACCOUNT.")
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = args.id
+    message_id = validate_msg_id(args.id)
     to_addr = args.to
 
     acct_escaped = escape(account)
@@ -339,6 +341,8 @@ def cmd_forward(args) -> None:
 
     # Extract email from to_addr (handles both bare and formatted addresses)
     _, to_email = parseaddr(to_addr)
+    if not to_email or "@" not in to_email:
+        die(f"Cannot determine forward address from: '{to_addr}'")
 
     body_escaped = escape(fwd_body)
     subject_escaped = escape(fwd_subject)

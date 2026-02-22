@@ -24,7 +24,7 @@ src/my_cli/
 │   └── dates.py                  # parse_date(), to_applescript_date()
 └── commands/
     └── mail/                      # All mail subcommands (16 modules)
-        ├── __init__.py            # Auto-wires all registered command modules
+        ├── __init__.py            # Imports and wires all registered command modules
         ├── accounts.py            # inbox, accounts, mailboxes
         ├── messages.py            # list, read, search
         ├── actions.py             # mark-read, mark-unread, flag, unflag, move, delete
@@ -67,7 +67,7 @@ This is implemented in `config.py:resolve_account()` and used by `util/mail_help
 
 ## Command Registration
 
-Each command module in `commands/mail/` exports a `register(subparsers)` function that adds its commands to the argparse tree. The `commands/mail/__init__.py` router auto-discovers and calls all `register()` functions.
+Each command module in `commands/mail/` exports a `register(subparsers)` function that adds its commands to the argparse tree. The `commands/mail/__init__.py` router explicitly imports and calls all `register()` functions.
 
 To add a new command:
 
@@ -87,4 +87,4 @@ Batch commands (`batch-read`, `batch-move`, `batch-delete`, `batch-flag`) log th
 
 Tests live in `tests/` and use `unittest.mock` to mock AppleScript calls. No actual Mail.app interaction happens during testing. Run with `pytest`.
 
-The suite has 196 tests across 17 test files covering command parsing, AppleScript output parsing, error paths, date handling, formatting, config resolution, batch operations, undo logging, templates, and AI classification logic.
+The suite has 292 tests across 17 test files covering command parsing, AppleScript output parsing, error paths, date handling, formatting, config resolution, batch operations, undo logging, templates, and AI classification logic.

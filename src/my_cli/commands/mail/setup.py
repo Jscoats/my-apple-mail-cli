@@ -1,6 +1,7 @@
 """Setup wizard for first-time configuration: init."""
 
 import os
+import re
 import sys
 import tty
 import termios
@@ -28,6 +29,8 @@ _HINT_CHECKBOX = f"  {_K_ARROWS} navigate   {_K_SPACE} toggle   {_K_ENTER} confi
 
 def _is_interactive() -> bool:
     """True when running in a real terminal (not a pipe or test)."""
+    if os.environ.get("CI") or os.environ.get("MY_CLI_NON_INTERACTIVE"):
+        return False
     return sys.stdin.isatty() and sys.stdout.isatty()
 
 
@@ -270,6 +273,8 @@ end tell
     except EOFError:
         raw_token = ""
     if raw_token:
+        if not re.match(r'^[a-f0-9]{40}$', raw_token):
+            print("Warning: Token doesn't look like a standard Todoist API token (expected 40 hex chars). Saving anyway.")
         todoist_token = raw_token
 
     # Build and write config
