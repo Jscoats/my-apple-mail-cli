@@ -12,7 +12,7 @@ from my_cli.config import (
 from my_cli.util.applescript import escape, run
 from my_cli.util.dates import parse_date, to_applescript_date
 from my_cli.util.formatting import format_output, truncate
-from my_cli.util.mail_helpers import resolve_message_context
+from my_cli.util.mail_helpers import resolve_mailbox, resolve_message_context
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +227,8 @@ def cmd_search(args) -> None:
     limit = validate_limit(getattr(args, "limit", DEFAULT_MESSAGE_LIMIT))
 
     query_escaped = escape(query)
+    if mailbox and account:
+        mailbox = resolve_mailbox(account, mailbox)
 
     if mailbox and account:
         acct_escaped = escape(account)

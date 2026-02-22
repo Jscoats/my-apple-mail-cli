@@ -90,6 +90,34 @@ end tell
                 break
             print(f"Please enter a number between 1 and {len(enabled_accounts)}.")
 
+    # Ask which accounts are Gmail (for mailbox name mapping)
+    gmail_accounts: list[str] = []
+    if len(enabled_accounts) == 1:
+        try:
+            ans = input(f"\nIs '{enabled_accounts[0]['name']}' a Gmail account? [y/N]: ").strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            ans = "n"
+        if ans == "y":
+            gmail_accounts = [enabled_accounts[0]["name"]]
+    else:
+        print("\nWhich accounts are Gmail? (enables automatic mailbox name translation)")
+        print("Enter numbers separated by commas, or press Enter to skip.")
+        for i, acct in enumerate(enabled_accounts, start=1):
+            print(f"  {i}. {acct['name']} ({acct['email']})")
+        try:
+            raw_gmail = input("Gmail accounts: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            raw_gmail = ""
+        if raw_gmail:
+            for part in raw_gmail.split(","):
+                part = part.strip()
+                if part.isdigit() and 1 <= int(part) <= len(enabled_accounts):
+                    gmail_accounts.append(enabled_accounts[int(part) - 1]["name"])
+
+    if gmail_accounts:
+        print(f"Gmail accounts: {', '.join(gmail_accounts)}")
+        print("  Mailbox names like 'Spam', 'Trash', 'Sent' will auto-map to [Gmail]/... equivalents.")
+
     # Optionally ask for Todoist API token
     todoist_token = ""
     try:
@@ -103,11 +131,13 @@ end tell
         todoist_token = raw_token
 
     # Build and write config
-    config = {
+    config: dict = {
         "mail": {
             "default_account": chosen["name"],
         }
     }
+    if gmail_accounts:
+        config["mail"]["gmail_accounts"] = gmail_accounts
     if todoist_token:
         config["todoist_api_token"] = todoist_token
 
@@ -120,6 +150,8 @@ end tell
         f"\nConfiguration saved to {CONFIG_FILE}\n"
         f"  Default account: {chosen['name']} ({chosen['email']})\n"
     )
+    if gmail_accounts:
+        success_text += f"  Gmail accounts: {', '.join(gmail_accounts)}\n"
     if todoist_token:
         success_text += "  Todoist token: saved\n"
     success_text += (

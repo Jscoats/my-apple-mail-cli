@@ -15,6 +15,9 @@ from __future__ import annotations
 
 import json
 import os
+import fcntl
+import time
+from contextlib import contextmanager
 
 CONFIG_DIR = os.path.expanduser("~/.config/my")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
@@ -47,17 +50,49 @@ def _ensure_dir() -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
 
 
+@contextmanager
+def _file_lock(path: str):
+    """Context manager for file-based locking with retry."""
+    lock_path = path + ".lock"
+    max_retries = 10
+    retry_delay = 0.05  # 50ms
+
+    _ensure_dir()
+    for attempt in range(max_retries):
+        try:
+            lock_file = open(lock_path, "w")
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try:
+                yield lock_file
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                lock_file.close()
+            break
+        except BlockingIOError:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+            else:
+                raise RuntimeError(f"Could not acquire lock on {path} after {max_retries} attempts")
+
+
 def _load_json(path: str) -> dict:
     if os.path.isfile(path):
-        with open(path) as f:
-            return json.load(f)
+        try:
+            with open(path) as f:
+                content = f.read().strip()
+                if not content:  # Handle empty/truncated files
+                    return {}
+                return json.loads(content)
+        except (json.JSONDecodeError, IOError):
+            return {}
     return {}
 
 
 def _save_json(path: str, data: dict) -> None:
     _ensure_dir()
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
+    with _file_lock(path):
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
 
 
 def get_config() -> dict:
@@ -96,3 +131,9 @@ def resolve_account(explicit: str | None) -> str | None:
 def validate_limit(limit: int) -> int:
     """Clamp limit to [1, MAX_MESSAGE_LIMIT]."""
     return max(1, min(limit, MAX_MESSAGE_LIMIT))
+
+
+def get_gmail_accounts() -> list[str]:
+    """Return list of account names configured as Gmail accounts."""
+    cfg = get_config()
+    return cfg.get("mail", {}).get("gmail_accounts", [])

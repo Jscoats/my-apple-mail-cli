@@ -11,6 +11,7 @@ from my_cli.util.applescript import escape, run
 from my_cli.util.dates import to_applescript_date
 from my_cli.util.formatting import die, format_output
 from my_cli.commands.mail.undo import log_batch_operation
+from my_cli.util.mail_helpers import resolve_mailbox
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +100,7 @@ def cmd_batch_move(args) -> None:
     dest_mailbox = getattr(args, "to_mailbox", None)
     if not dest_mailbox:
         die("--to-mailbox is required.")
+    dest_mailbox = resolve_mailbox(account, dest_mailbox)
 
     dry_run = getattr(args, "dry_run", False)
     limit = getattr(args, "limit", None)
@@ -204,6 +206,9 @@ def cmd_batch_delete(args) -> None:
     # --older-than without --from-sender still requires --mailbox for safety
     if older_than_days is not None and sender is None and not mailbox:
         die("--mailbox is required when using --older-than without --from-sender.")
+
+    if mailbox:
+        mailbox = resolve_mailbox(account, mailbox)
 
     acct_escaped = escape(account)
 
