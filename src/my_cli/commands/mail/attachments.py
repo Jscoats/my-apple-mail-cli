@@ -86,6 +86,13 @@ def cmd_save_attachment(args) -> None:
 
     # Build save path
     save_path = os.path.join(output_dir, att_name)
+
+    # Guard against path traversal (e.g. att_name = "../../.ssh/authorized_keys")
+    real_save = os.path.realpath(os.path.abspath(save_path))
+    real_base = os.path.realpath(os.path.abspath(output_dir))
+    if not real_save.startswith(real_base + os.sep) and real_save != real_base:
+        die(f"Unsafe attachment filename: path traversal detected.")
+
     save_path_posix = save_path  # Already absolute from sanitize_path + join
 
     # Escape for AppleScript

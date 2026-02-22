@@ -17,6 +17,9 @@ def validate_msg_id(value) -> int:
     """
     from my_cli.util.formatting import die
 
+    # Reject floats explicitly — int(1.5) == 1 without error, which is misleading
+    if isinstance(value, float):
+        die(f"Invalid message ID '{value}': must be a positive integer.")
     try:
         int_val = int(value)
     except (TypeError, ValueError):

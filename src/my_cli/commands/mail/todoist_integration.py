@@ -2,6 +2,7 @@
 
 import json
 import ssl
+import sys
 import urllib.request
 import urllib.error
 
@@ -58,7 +59,15 @@ def cmd_to_todoist(args) -> None:
         "priority": priority,
     }
     if project:
-        task_data["project_name"] = project
+        # The Todoist REST API v2 does not accept a `project_name` field for task
+        # creation — it only supports `project_id`. Resolving a name to an ID would
+        # require an additional API call and error handling, so project assignment by
+        # name is not currently implemented.  The task will be created in the Inbox.
+        print(
+            f"Warning: --project is not currently supported by the Todoist REST API v2. "
+            f"The task will be created in the Inbox (project '{project}' ignored).",
+            file=sys.stderr,
+        )
     if due:
         task_data["due_string"] = due
 
@@ -104,7 +113,7 @@ def register(subparsers) -> None:
     p.add_argument("id", type=int, help="Message ID")
     p.add_argument("-a", "--account", help="Mail account name")
     p.add_argument("-m", "--mailbox", help="Mailbox name (default: INBOX)")
-    p.add_argument("--project", help="Todoist project name")
+    p.add_argument("--project", help="Todoist project name (not currently functional — project assignment by name is not supported by the API; task will be created in Inbox)")
     p.add_argument("--priority", type=int, choices=[1, 2, 3, 4], default=1, help="Priority (1-4, 4=highest)")
     p.add_argument("--due", help="Due date (natural language, e.g. 'tomorrow')")
     p.add_argument("--json", action="store_true", help="Output as JSON")

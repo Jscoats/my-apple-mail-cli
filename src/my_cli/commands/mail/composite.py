@@ -271,6 +271,8 @@ def cmd_reply(args) -> None:
     reply_subject = orig_subject if orig_subject.lower().startswith("re:") else f"Re: {orig_subject}"
     # Extract email from sender
     reply_to = extract_email(orig_sender)
+    if not reply_to or "@" not in reply_to:
+        die(f"Cannot determine reply address from sender: '{orig_sender}'")
 
     # Build reply body with quote
     quoted = "\n".join(f"> {line}" for line in orig_content.split("\n")[:20])
@@ -339,6 +341,8 @@ def cmd_forward(args) -> None:
 
     # Extract email from to_addr (handles both bare and formatted addresses)
     _, to_email = parseaddr(to_addr)
+    if not to_email or "@" not in to_email:
+        die(f"Cannot determine forward address from: '{to_addr}'")
 
     body_escaped = escape(fwd_body)
     subject_escaped = escape(fwd_subject)

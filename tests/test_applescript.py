@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from my_cli.util.applescript import escape, run, sanitize_path
+from my_cli.util.applescript import escape, run, sanitize_path, validate_msg_id
 
 
 class TestEscape:
@@ -96,3 +96,31 @@ class TestRunSmartQuotes:
 
         captured = capsys.readouterr()
         assert "Account not found" in captured.err
+
+
+class TestValidateMsgId:
+    def test_valid_positive_int(self):
+        assert validate_msg_id(123) == 123
+
+    def test_valid_string_int(self):
+        assert validate_msg_id("456") == 456
+
+    def test_zero_raises(self):
+        with pytest.raises(SystemExit):
+            validate_msg_id(0)
+
+    def test_negative_raises(self):
+        with pytest.raises(SystemExit):
+            validate_msg_id(-1)
+
+    def test_non_numeric_raises(self):
+        with pytest.raises(SystemExit):
+            validate_msg_id("abc")
+
+    def test_none_raises(self):
+        with pytest.raises(SystemExit):
+            validate_msg_id(None)
+
+    def test_float_raises(self):
+        with pytest.raises(SystemExit):
+            validate_msg_id(1.5)

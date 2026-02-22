@@ -3,7 +3,7 @@
 import json
 import os
 
-from my_cli.config import resolve_account, TEMPLATES_FILE, _file_lock
+from my_cli.config import resolve_account, TEMPLATES_FILE, file_lock
 from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import die, format_output
 
@@ -24,7 +24,7 @@ def cmd_draft(args) -> None:
     template_name = getattr(args, "template", None)
     if template_name:
         if os.path.isfile(TEMPLATES_FILE):
-            with _file_lock(TEMPLATES_FILE):
+            with file_lock(TEMPLATES_FILE):
                 with open(TEMPLATES_FILE) as f:
                     try:
                         templates = json.load(f)

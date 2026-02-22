@@ -10,6 +10,7 @@ from my_cli.config import (
     MAX_MESSAGES_BATCH,
     NOREPLY_PATTERNS,
     resolve_account,
+    validate_limit,
 )
 from my_cli.util.applescript import escape, run
 from my_cli.util.applescript_templates import mailbox_iterator
@@ -161,7 +162,7 @@ def _build_newsletters_script(account: str | None, mailbox: str, limit: int) -> 
 def cmd_process_inbox(args) -> None:
     """Read-only diagnostic: categorize unread messages and output action plan."""
     account = resolve_account(getattr(args, "account", None))
-    limit = getattr(args, "limit", 50)
+    limit = validate_limit(getattr(args, "limit", 50))
 
     script = _build_process_inbox_script(account, limit)
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
@@ -250,7 +251,7 @@ def cmd_clean_newsletters(args) -> None:
     """Identify likely newsletter senders and suggest batch-move commands."""
     account = resolve_account(getattr(args, "account", None))
     mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    limit = getattr(args, "limit", 200)
+    limit = max(1, min(getattr(args, "limit", 200), MAX_MESSAGES_BATCH))
 
     script = _build_newsletters_script(account, mailbox, limit)
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)

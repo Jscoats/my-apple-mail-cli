@@ -25,6 +25,7 @@ CONFIG_DIR = os.path.expanduser("~/.config/my")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 STATE_FILE = os.path.join(CONFIG_DIR, "state.json")
 TEMPLATES_FILE = os.path.join(CONFIG_DIR, "mail-templates.json")
+UNDO_LOG_FILE = os.path.join(CONFIG_DIR, "mail-undo.json")
 
 DEFAULT_MESSAGE_LIMIT = 25
 MAX_MESSAGE_LIMIT = 100
@@ -35,7 +36,6 @@ DEFAULT_MAILBOX = "INBOX"
 MAX_MESSAGES_BATCH = 500
 DEFAULT_DIGEST_LIMIT = 50
 DEFAULT_TOP_SENDERS_LIMIT = 10
-MAX_BATCH_READ_LIMIT = 1000
 MAX_EXPORT_BULK_LIMIT = 100
 
 # AppleScript timeout values (seconds)
@@ -46,7 +46,7 @@ APPLESCRIPT_TIMEOUT_BATCH = 120
 
 # Data separators for AppleScript field/record parsing
 FIELD_SEPARATOR = "\x1F"
-RECORD_SEPARATOR = "\x1FEND\x1F"
+RECORD_SEPARATOR = "\x1eEND\x1e"
 
 # Common patterns for identifying no-reply / automated senders
 NOREPLY_PATTERNS = [
@@ -60,7 +60,7 @@ def _ensure_dir() -> None:
 
 
 @contextmanager
-def _file_lock(path: str):
+def file_lock(path: str):
     """Context manager for file-based locking with retry."""
     lock_path = path + ".lock"
     max_retries = 10
@@ -90,20 +90,24 @@ def _file_lock(path: str):
 def _load_json(path: str) -> dict:
     if os.path.isfile(path):
         try:
-            with _file_lock(path):
+            with file_lock(path):
                 with open(path) as f:
                     content = f.read().strip()
                     if not content:  # Handle empty/truncated files
                         return {}
                     return json.loads(content)
-        except (json.JSONDecodeError, IOError):
+        except json.JSONDecodeError:
+            import sys
+            print(f"Warning: {path} contains invalid JSON. Using defaults.", file=sys.stderr)
+            return {}
+        except IOError:
             return {}
     return {}
 
 
 def _save_json(path: str, data: dict) -> None:
     _ensure_dir()
-    with _file_lock(path):
+    with file_lock(path):
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
 

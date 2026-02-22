@@ -215,7 +215,7 @@ def cmd_unsubscribe(args) -> None:
                           json_data={"id": message_id, "subject": subject, "unsubscribed": True,
                                     "method": "one-click", "status_code": status})
             return
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+        except (urllib.error.URLError, OSError) as e:
             # One-click failed, fall through to browser
             err_msg = str(e)
             if not getattr(args, "json", False):
@@ -272,7 +272,11 @@ def cmd_not_junk(args) -> None:
     message_id = validate_msg_id(args.id)
 
     acct_escaped = escape(account)
-    junk_mailbox = resolve_mailbox(account, "Junk")
+    custom_mailbox = getattr(args, "mailbox", None)
+    if custom_mailbox:
+        junk_mailbox = resolve_mailbox(account, custom_mailbox)
+    else:
+        junk_mailbox = resolve_mailbox(account, "Junk")
     inbox_mailbox = resolve_mailbox(account, "INBOX")
     junk_escaped = escape(junk_mailbox)
     inbox_escaped = escape(inbox_mailbox)
@@ -410,6 +414,7 @@ def register(subparsers) -> None:
     p = subparsers.add_parser("not-junk", help="Mark message as not junk and move to INBOX")
     p.add_argument("id", type=int, help="Message ID")
     p.add_argument("-a", "--account", help="Mail account name")
+    p.add_argument("-m", "--mailbox", help="Source mailbox (default: Junk)")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_not_junk)
 
