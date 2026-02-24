@@ -128,7 +128,7 @@ def cmd_empty_trash(args) -> None:
 
     # Use System Events to click the menu — this triggers a native
     # confirmation dialog that the user must approve.
-    menu_escaped = menu_item.replace('"', '\\"')
+    menu_escaped = escape(menu_item)
     ui_script = f"""
     tell application "Mail" to activate
     delay 0.5

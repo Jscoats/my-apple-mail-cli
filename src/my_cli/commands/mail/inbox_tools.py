@@ -131,7 +131,7 @@ def _build_newsletters_script(account: str | None, mailbox: str, limit: int) -> 
             repeat with acct in (every account)
                 if enabled of acct then
                     repeat with mbox in (mailboxes of acct)
-                        if name of mbox is "{DEFAULT_MAILBOX}" then
+                        if name of mbox is "{mailbox}" then
                             try
                                 set allMsgs to (every message of mbox)
                                 set msgCount to count of allMsgs
@@ -226,7 +226,7 @@ def cmd_process_inbox(args) -> None:
         if len(notifications) > 5:
             text += f"\n  ... and {len(notifications) - 5} more"
         text += "\n\nSuggested commands:"
-        text += f"\n  my mail batch-read <ID1> <ID2> ... -a \"{notifications[0]['account']}\""
+        text += f"\n  my mail batch-read -a \"{notifications[0]['account']}\""
         text += f"\n  my mail unsubscribe <ID> -a \"{notifications[0]['account']}\""
 
     json_data = {

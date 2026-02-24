@@ -24,10 +24,11 @@ _GROUPED_HELP = """\
 Commands by category:
 
   Setup:        init, check, accounts, mailboxes
-  Reading:      inbox, list, read, search, thread, context, headers
+  Reading:      inbox, count, list, read, search, thread, context, headers
   Actions:      mark-read, mark-unread, flag, unflag, move, delete
-                junk, not-junk, unsubscribe, rules, empty-trash
+                junk, not-junk, unsubscribe, open, rules
   Compose:      draft, reply, forward, templates
+  Manage:       create-mailbox, delete-mailbox, empty-trash
   Batch:        batch-read, batch-flag, batch-move, batch-delete, undo
   AI & Analytics: summary, triage, find-related, digest, top-senders,
                 show-flagged, weekly-review, process-inbox,

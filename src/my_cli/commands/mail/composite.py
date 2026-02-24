@@ -141,8 +141,14 @@ def _export_bulk(args, mailbox: str, account: str, dest: str, after: str | None)
         safe_subject = re.sub(r'[^\w\s-]', '', subject).strip().replace(' ', '-')[:50]
         filename = f"{safe_subject}-{msg_id}.md" if safe_subject else f"message-{msg_id}.md"
 
+        filepath = os.path.join(dest_dir, filename)
+        real_filepath = os.path.realpath(os.path.abspath(filepath))
+        real_dest = os.path.realpath(os.path.abspath(dest_dir))
+        if not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest:
+            continue
+
         md = f"# {subject}\n\n**From:** {sender}  \n**Date:** {date}\n\n---\n\n{content}"
-        with open(os.path.join(dest_dir, filename), "w", encoding="utf-8") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(md)
         exported += 1
 

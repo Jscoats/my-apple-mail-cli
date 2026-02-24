@@ -25,6 +25,7 @@ def _save_templates(templates: dict) -> None:
     with file_lock(TEMPLATES_FILE):
         with open(TEMPLATES_FILE, "w") as f:
             json.dump(templates, f, indent=2)
+    os.chmod(TEMPLATES_FILE, 0o600)
 
 
 def cmd_templates_list(args) -> None:

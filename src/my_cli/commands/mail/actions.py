@@ -229,7 +229,7 @@ def cmd_unsubscribe(args) -> None:
         if _is_private_url(url):
             die(f"Refused to POST to private/internal address: {url}")
         try:
-            ctx = ssl.create_default_context()
+            ctx = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
             req = urllib.request.Request(
                 url,
                 data=b"List-Unsubscribe=One-Click",

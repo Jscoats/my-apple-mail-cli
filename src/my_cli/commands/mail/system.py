@@ -1,4 +1,4 @@
-"""System mail commands: check, headers, rules, junk, not-junk."""
+"""System mail commands: check, headers, rules."""
 
 from my_cli.config import (
     DEFAULT_MAILBOX,

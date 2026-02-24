@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -69,7 +70,7 @@ def validate_msg_id(value) -> int:
     return int_val
 
 
-def escape(s: str) -> str:
+def escape(s: str | None) -> str:
     """Escape a string for safe use in AppleScript."""
     if s is None:
         return ""
@@ -77,7 +78,7 @@ def escape(s: str) -> str:
     s = s.replace('"', '\\"')
     s = s.replace("\n", "\\n")
     s = s.replace("\r", "\\r")
-    s = s.replace("\0", "")
+    s = re.sub(r'[\x00-\x1f]', '', s)
     return s
 
 
