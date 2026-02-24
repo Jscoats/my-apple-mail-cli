@@ -1292,7 +1292,6 @@ class TestCleanNewslettersEdgeCases:
         from mxctl.commands.mail.inbox_tools import cmd_clean_newsletters
 
         mock_run.return_value = ""
-        monkeypatch_needed = False  # resolve_account returns "iCloud" by default from mock_args
         args = _make_args(account=None, mailbox="INBOX", limit=200)
         # Patch resolve_account to return None
         with patch("mxctl.commands.mail.inbox_tools.resolve_account", return_value=None):

@@ -2,8 +2,6 @@
 
 import json
 import os
-import time
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -257,9 +255,8 @@ class TestFileLock:
         monkeypatch.setattr("fcntl.flock", always_fail)
         monkeypatch.setattr("mxctl.config.time.sleep", lambda _: None)
 
-        with pytest.raises(SystemExit) as exc_info:
-            with file_lock(lock_target):
-                pass
+        with pytest.raises(SystemExit) as exc_info, file_lock(lock_target):
+            pass
         assert exc_info.value.code == 1
 
 

@@ -549,7 +549,6 @@ class TestCmdContextEdgeCases:
     def test_context_all_accounts_flag(self, monkeypatch, capsys):
         """cmd_context --all-accounts uses 'every account' loop (lines 168-169)."""
         from mxctl.commands.mail.ai import cmd_context
-        from mxctl.config import RECORD_SEPARATOR
 
         # First call returns main message; second call returns thread
         mock_run = Mock(side_effect=[

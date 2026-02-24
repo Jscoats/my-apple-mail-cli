@@ -2,7 +2,6 @@
 
 import json
 import os
-from argparse import Namespace
 from unittest.mock import Mock
 
 from mxctl.config import FIELD_SEPARATOR
