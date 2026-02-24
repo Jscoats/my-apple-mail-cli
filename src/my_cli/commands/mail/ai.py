@@ -11,6 +11,7 @@ from my_cli.config import (
     NOREPLY_PATTERNS,
     RECORD_SEPARATOR,
     resolve_account,
+    save_message_aliases,
 )
 from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.applescript_templates import inbox_iterator_all_accounts
@@ -40,11 +41,15 @@ def cmd_summary(args) -> None:
         if msg is not None:
             messages.append(msg)
 
+    save_message_aliases([m["id"] for m in messages])
+    for i, m in enumerate(messages, 1):
+        m["alias"] = i
+
     # Ultra-concise format for AI consumption
     text = f"{len(messages)} unread:"
     for m in messages:
         sender = extract_display_name(m["sender"])
-        text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 55)}"
+        text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 55)}"
     format_output(args, text, json_data=messages)
 
 
@@ -82,6 +87,12 @@ def cmd_triage(args) -> None:
         else:
             people.append(msg)
 
+    # Assign sequential aliases across all categories
+    all_messages = flagged + people + notifications
+    save_message_aliases([m["id"] for m in all_messages])
+    for i, m in enumerate(all_messages, 1):
+        m["alias"] = i
+
     total = len(flagged) + len(people) + len(notifications)
     text = f"Triage ({total} unread):"
 
@@ -89,19 +100,19 @@ def cmd_triage(args) -> None:
         text += f"\n\nFLAGGED ({len(flagged)}):"
         for m in flagged:
             sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
 
     if people:
         text += f"\n\nPEOPLE ({len(people)}):"
         for m in people:
             sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
 
     if notifications:
         text += f"\n\nNOTIFICATIONS ({len(notifications)}):"
         for m in notifications:
             sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
 
     format_output(args, text, json_data={"flagged": flagged, "people": people, "notifications": notifications})
 
@@ -296,12 +307,20 @@ def cmd_find_related(args) -> None:
         normalized = normalize_subject(msg["subject"]).lower()
         threads[normalized].append(msg)
 
+    # Assign sequential aliases across all threads
+    all_msgs_flat = []
+    for _, msgs_list in sorted(threads.items(), key=lambda x: -len(x[1])):
+        all_msgs_flat.extend(msgs_list)
+    save_message_aliases([m["id"] for m in all_msgs_flat])
+    for i, m in enumerate(all_msgs_flat, 1):
+        m["alias"] = i
+
     text = f"Related messages for '{query}' ({len(threads)} conversations):"
     for thread_subject, msgs in sorted(threads.items(), key=lambda x: -len(x[1])):
         text += f"\n\n  {thread_subject} ({len(msgs)} messages):"
         for m in msgs[:5]:
             sender = extract_display_name(m["sender"])
-            text += f"\n    [{m['id']}] {truncate(sender, 20)} — {m['date']}"
+            text += f"\n    [{m['alias']}] {truncate(sender, 20)} — {m['date']}"
         if len(msgs) > 5:
             text += f"\n    ... and {len(msgs) - 5} more"
     format_output(args, text, json_data=dict(threads))

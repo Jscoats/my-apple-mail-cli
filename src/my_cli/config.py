@@ -139,6 +139,31 @@ def get_state() -> dict:
     return _load_json(STATE_FILE)
 
 
+def save_message_aliases(aliases: list[int]) -> None:
+    """Save ordered list of message IDs as session aliases to state."""
+    state = get_state()
+    state.setdefault("mail", {})["aliases"] = {
+        str(i + 1): mid for i, mid in enumerate(aliases)
+    }
+    _save_json(STATE_FILE, state)
+
+
+def resolve_alias(value) -> int | None:
+    """If value matches a saved alias number, resolve to real message ID."""
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    if n <= 0:
+        return None
+    state = get_state()
+    aliases = state.get("mail", {}).get("aliases", {})
+    real_id = aliases.get(str(n))
+    if real_id is not None:
+        return int(real_id)
+    return None
+
+
 def save_last_account(account: str) -> None:
     state = get_state()
     if "mail" not in state:

@@ -29,7 +29,7 @@ def test_cmd_inbox_basic(monkeypatch, mock_args, capsys):
     assert "Inbox Summary" in captured.out
     assert "iCloud:" in captured.out
     assert "Unread: 2" in captured.out
-    assert "[123] Test Subject" in captured.out
+    assert "[1] Test Subject" in captured.out
 
 
 def test_cmd_inbox_json(monkeypatch, mock_args, capsys):
@@ -161,8 +161,8 @@ def test_cmd_list_basic(monkeypatch, mock_args, capsys):
 
     captured = capsys.readouterr()
     assert "Messages in INBOX" in captured.out
-    assert "[123] Test Subject" in captured.out
-    assert "[124] Another" in captured.out
+    assert "[1] Test Subject" in captured.out
+    assert "[2] Another" in captured.out
     assert "UNREAD" in captured.out
     assert "FLAGGED" in captured.out
 
@@ -252,7 +252,7 @@ def test_cmd_search_basic(monkeypatch, mock_args, capsys):
 
     captured = capsys.readouterr()
     assert "Search results for 'test'" in captured.out
-    assert "[123] Test Subject" in captured.out
+    assert "[1] Test Subject" in captured.out
     assert "Location: INBOX [iCloud]" in captured.out
 
 
@@ -395,7 +395,7 @@ def test_cmd_summary_basic(monkeypatch, mock_args, capsys):
 
     captured = capsys.readouterr()
     assert "2 unread:" in captured.out
-    assert "[123]" in captured.out
+    assert "[1]" in captured.out
     assert "Test Subject" in captured.out
 
 
@@ -506,7 +506,7 @@ def test_cmd_show_flagged_basic(monkeypatch, mock_args, capsys):
 
     captured = capsys.readouterr()
     assert "Flagged messages" in captured.out
-    assert "[123] Flagged Subject" in captured.out
+    assert "[1] Flagged Subject" in captured.out
     assert "Location: INBOX [iCloud]" in captured.out
 
 
@@ -733,7 +733,7 @@ def test_cmd_thread_basic(monkeypatch, mock_args, capsys):
     assert "Thread:" in captured.out
     assert "Original Subject" in captured.out
     assert "2 messages" in captured.out
-    assert "[100]" in captured.out
+    assert "[1]" in captured.out
 
 
 def test_cmd_thread_json(monkeypatch, mock_args, capsys):
@@ -821,7 +821,7 @@ def test_cmd_digest_basic(monkeypatch, mock_args, capsys):
     captured = capsys.readouterr()
     assert "Unread Digest" in captured.out
     assert "news@example.com" in captured.out
-    assert "[123]" in captured.out
+    assert "[1]" in captured.out
 
 
 def test_cmd_digest_json(monkeypatch, mock_args, capsys):

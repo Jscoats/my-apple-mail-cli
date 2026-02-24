@@ -261,9 +261,9 @@ class TestCmdProcessInbox:
         assert "FLAGGED" in captured.out
         assert "PEOPLE" in captured.out
         assert "NOTIFICATIONS" in captured.out
-        assert "103" in captured.out  # flagged message ID
-        assert "101" in captured.out  # people message ID
-        assert "102" in captured.out  # notification message ID
+        assert "[1]" in captured.out  # flagged message alias
+        assert "[2]" in captured.out  # people message alias
+        assert "[3]" in captured.out  # notification message alias
 
 
 # ---------------------------------------------------------------------------

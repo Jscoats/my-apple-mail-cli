@@ -2,7 +2,7 @@
 
 import os
 
-from my_cli.config import CONFIG_FILE, resolve_account, FIELD_SEPARATOR
+from my_cli.config import CONFIG_FILE, resolve_account, save_message_aliases, FIELD_SEPARATOR
 from my_cli.util.applescript import escape, run
 from my_cli.util.formatting import truncate, format_output
 
@@ -121,6 +121,19 @@ def cmd_inbox(args) -> None:
             }
             accounts.append(current)
 
+    # Assign sequential aliases across all accounts
+    all_msg_ids = []
+    for acct_data in accounts:
+        for msg in acct_data["recent_unread"]:
+            all_msg_ids.append(msg["id"])
+    if all_msg_ids:
+        save_message_aliases(all_msg_ids)
+    alias_num = 0
+    for acct_data in accounts:
+        for msg in acct_data["recent_unread"]:
+            alias_num += 1
+            msg["alias"] = alias_num
+
     # Build text from parsed data
     text = "Inbox Summary\n" + "=" * 50
     total_unread = 0
@@ -131,7 +144,7 @@ def cmd_inbox(args) -> None:
         if acct_data["unread"] > 0:
             text += "\n  Recent unread:"
             for msg in acct_data["recent_unread"]:
-                text += f"\n    [{msg['id']}] {truncate(msg['subject'], 45)}"
+                text += f"\n    [{msg['alias']}] {truncate(msg['subject'], 45)}"
                 text += f"\n      From: {msg['sender']}"
     text += f"\n\n{'=' * 50}"
     text += f"\nTotal unread across all accounts: {total_unread}"

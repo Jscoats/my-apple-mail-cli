@@ -10,6 +10,7 @@ from my_cli.config import (
     MAX_MESSAGES_BATCH,
     NOREPLY_PATTERNS,
     resolve_account,
+    save_message_aliases,
     validate_limit,
 )
 from my_cli.util.applescript import escape, run
@@ -192,6 +193,12 @@ def cmd_process_inbox(args) -> None:
         else:
             people.append(msg)
 
+    # Assign sequential aliases across all categories
+    all_messages = flagged + people + notifications
+    save_message_aliases([m["id"] for m in all_messages])
+    for i, m in enumerate(all_messages, 1):
+        m["alias"] = i
+
     total = len(flagged) + len(people) + len(notifications)
     text = f"Inbox Processing Plan ({total} unread):"
 
@@ -200,7 +207,7 @@ def cmd_process_inbox(args) -> None:
         text += f"\n\nFLAGGED ({len(flagged)}) — High priority:"
         for m in flagged[:5]:
             sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
         if len(flagged) > 5:
             text += f"\n  ... and {len(flagged) - 5} more"
         text += "\n\nSuggested commands:"
@@ -211,7 +218,7 @@ def cmd_process_inbox(args) -> None:
         text += f"\n\nPEOPLE ({len(people)}) — Requires attention:"
         for m in people[:5]:
             sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
         if len(people) > 5:
             text += f"\n  ... and {len(people) - 5} more"
         text += "\n\nSuggested commands:"
@@ -222,7 +229,7 @@ def cmd_process_inbox(args) -> None:
         text += f"\n\nNOTIFICATIONS ({len(notifications)}) — Bulk actions:"
         for m in notifications[:5]:
             sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['id']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
         if len(notifications) > 5:
             text += f"\n  ... and {len(notifications) - 5} more"
         text += "\n\nSuggested commands:"
@@ -399,6 +406,12 @@ def cmd_weekly_review(args) -> None:
             if not any(pattern in sender_email.lower() for pattern in NOREPLY_PATTERNS):
                 unreplied_messages.append(msg)
 
+    # Assign sequential aliases across all sections
+    all_messages = flagged_messages + attachment_messages + unreplied_messages
+    save_message_aliases([m["id"] for m in all_messages])
+    for i, m in enumerate(all_messages, 1):
+        m["alias"] = i
+
     # Build report
     scope = f" for account '{account}'" if account else " across all accounts"
     text = f"Weekly Review{scope} (last {days} days):"
@@ -407,7 +420,7 @@ def cmd_weekly_review(args) -> None:
     text += f"\n\nFlagged Messages ({len(flagged_messages)}):"
     if flagged_messages:
         for msg in flagged_messages[:10]:  # Show up to 10
-            text += f"\n  [{msg['id']}] {truncate(msg['subject'], 60)}"
+            text += f"\n  [{msg['alias']}] {truncate(msg['subject'], 60)}"
             text += f"\n      From: {truncate(msg['sender'], 50)}"
         if len(flagged_messages) > 10:
             text += f"\n  ... and {len(flagged_messages) - 10} more"
@@ -418,7 +431,7 @@ def cmd_weekly_review(args) -> None:
     text += f"\n\nMessages with Attachments ({len(attachment_messages)}):"
     if attachment_messages:
         for msg in attachment_messages[:10]:
-            text += f"\n  [{msg['id']}] {truncate(msg['subject'], 60)} ({msg['attachment_count']} attachments)"
+            text += f"\n  [{msg['alias']}] {truncate(msg['subject'], 60)} ({msg['attachment_count']} attachments)"
             text += f"\n      From: {truncate(msg['sender'], 50)}"
         if len(attachment_messages) > 10:
             text += f"\n  ... and {len(attachment_messages) - 10} more"
@@ -429,7 +442,7 @@ def cmd_weekly_review(args) -> None:
     text += f"\n\nUnreplied from People ({len(unreplied_messages)}):"
     if unreplied_messages:
         for msg in unreplied_messages[:10]:
-            text += f"\n  [{msg['id']}] {truncate(msg['subject'], 60)}"
+            text += f"\n  [{msg['alias']}] {truncate(msg['subject'], 60)}"
             text += f"\n      From: {truncate(msg['sender'], 50)}"
         if len(unreplied_messages) > 10:
             text += f"\n  ... and {len(unreplied_messages) - 10} more"

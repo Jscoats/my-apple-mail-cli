@@ -12,6 +12,7 @@ from my_cli.config import (
     MAX_EXPORT_BULK_LIMIT,
     RECORD_SEPARATOR,
     resolve_account,
+    save_message_aliases,
 )
 from my_cli.util.applescript import escape, run, validate_msg_id
 from my_cli.util.formatting import die, format_output, truncate
@@ -229,9 +230,13 @@ def cmd_thread(args) -> None:
         if msg is not None:
             messages.append(msg)
 
+    save_message_aliases([m["id"] for m in messages])
+    for i, m in enumerate(messages, 1):
+        m["alias"] = i
+
     text = f"Thread: {thread_subject} ({len(messages)} messages):"
     for m in messages:
-        text += f"\n  [{m['id']}] {truncate(m['subject'], 50)}"
+        text += f"\n  [{m['alias']}] {truncate(m['subject'], 50)}"
         text += f"\n    From: {m['sender']}  Date: {m['date']}"
     format_output(args, text, json_data=messages)
 

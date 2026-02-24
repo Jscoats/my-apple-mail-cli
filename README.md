@@ -235,6 +235,19 @@ my mail to-todoist 123 --due "next Monday"
 
 To get your token: [Todoist Settings → Integrations → Developer](https://todoist.com/prefs/integrations)
 
+### Short Message Aliases
+
+Listing commands assign short numbers starting from `[1]` — no more copying 5-digit IDs:
+
+```bash
+my mail list                    # Shows [1], [2], [3]...
+my mail read 1                  # Read message [1]
+my mail flag 2                  # Flag message [2]
+my mail move 3 --to Archive     # Move message [3]
+```
+
+Aliases update each time you run a listing command (`list`, `inbox`, `search`, `triage`, `summary`, etc.). Full message IDs still work if you prefer them. JSON output includes both `id` (real) and `alias` (short number).
+
 ### JSON Output for Automation
 ```bash
 # Every command supports --json

@@ -289,7 +289,7 @@ class TestCmdSummary:
         out = capsys.readouterr().out
         # Only the valid message should be counted
         assert "1 unread:" in out
-        assert "[99]" in out
+        assert "[1]" in out
 
     def test_summary_json_contains_all_fields(self, monkeypatch, capsys):
         """cmd_summary JSON output includes account, id, subject, sender, and date fields."""

@@ -12,6 +12,7 @@ from my_cli.config import (
     FIELD_SEPARATOR,
     MAX_MESSAGES_BATCH,
     resolve_account,
+    save_message_aliases,
     validate_limit,
 )
 from my_cli.util.applescript import escape, run
@@ -126,12 +127,20 @@ def cmd_digest(args) -> None:
             domain = "other"
         groups[domain].append(msg)
 
+    # Collect all messages into a flat list for sequential aliases
+    all_messages = []
+    for domain, msgs in sorted(groups.items(), key=lambda x: -len(x[1])):
+        all_messages.extend(msgs)
+    save_message_aliases([m["id"] for m in all_messages])
+    for i, m in enumerate(all_messages, 1):
+        m["alias"] = i
+
     total = sum(len(msgs) for msgs in groups.values())
     text = f"Unread Digest ({total} messages, {len(groups)} groups):"
     for domain, msgs in sorted(groups.items(), key=lambda x: -len(x[1])):
         text += f"\n\n  {domain} ({len(msgs)}):"
         for m in msgs[:5]:
-            text += f"\n    [{m['id']}] {truncate(m['subject'], 45)}"
+            text += f"\n    [{m['alias']}] {truncate(m['subject'], 45)}"
             text += f"\n      From: {truncate(m['sender'], 40)}"
         if len(msgs) > 5:
             text += f"\n    ... and {len(msgs) - 5} more"
@@ -337,11 +346,15 @@ def cmd_show_flagged(args) -> None:
         if msg is not None:
             messages.append(msg)
 
+    save_message_aliases([m["id"] for m in messages])
+    for i, m in enumerate(messages, 1):
+        m["alias"] = i
+
     # Build text output
     scope = f" in account '{account}'" if account else " across all accounts"
     text = f"Flagged messages{scope} (showing up to {limit}):"
     for m in messages:
-        text += f"\n- [{m['id']}] {truncate(m['subject'], 60)}"
+        text += f"\n- [{m['alias']}] {truncate(m['subject'], 60)}"
         text += f"\n  From: {m['sender']}"
         text += f"\n  Date: {m['date']}"
         text += f"\n  Location: {m['mailbox']} [{m['account']}]"

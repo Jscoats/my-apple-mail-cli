@@ -53,14 +53,25 @@ def _warn_automation_once() -> None:
 def validate_msg_id(value) -> int:
     """Validate that value is a positive integer suitable for use as a message ID.
 
+    Supports short session aliases: if value matches a saved alias (e.g. "1"),
+    resolves to the real message ID from the most recent listing command.
+
     Raises SystemExit via die() if the value is not a positive integer.
     Returns the integer value on success.
     """
+    from my_cli.config import resolve_alias
     from my_cli.util.formatting import die
 
     # Reject floats explicitly — int(1.5) == 1 without error, which is misleading
     if isinstance(value, float):
         die(f"Invalid message ID '{value}': must be a positive integer.")
+
+    # Try alias resolution first
+    resolved = resolve_alias(value)
+    if resolved is not None:
+        return resolved
+
+    # Fall through to real ID validation
     try:
         int_val = int(value)
     except (TypeError, ValueError):

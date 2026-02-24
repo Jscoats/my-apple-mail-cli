@@ -7,6 +7,7 @@ from my_cli.config import (
     DEFAULT_MESSAGE_LIMIT,
     FIELD_SEPARATOR,
     resolve_account,
+    save_message_aliases,
     validate_limit,
 )
 from my_cli.util.applescript import escape, run, validate_msg_id
@@ -80,6 +81,10 @@ def cmd_list(args) -> None:
         if msg is not None:
             messages.append(msg)
 
+    save_message_aliases([m["id"] for m in messages])
+    for i, m in enumerate(messages, 1):
+        m["alias"] = i
+
     text = f"Messages in {mailbox} [{account}] (showing up to {limit}):"
     for m in messages:
         status_icons = []
@@ -88,7 +93,7 @@ def cmd_list(args) -> None:
         if m["flagged"]:
             status_icons.append("FLAGGED")
         status_str = f" [{', '.join(status_icons)}]" if status_icons else ""
-        text += f"\n- [{m['id']}] {truncate(m['subject'], 60)}{status_str}"
+        text += f"\n- [{m['alias']}] {truncate(m['subject'], 60)}{status_str}"
         text += f"\n  From: {m['sender']}"
         text += f"\n  Date: {m['date']}"
     format_output(args, text, json_data=messages)
@@ -303,6 +308,10 @@ def cmd_search(args) -> None:
         if msg is not None:
             messages.append(msg)
 
+    save_message_aliases([m["id"] for m in messages])
+    for i, m in enumerate(messages, 1):
+        m["alias"] = i
+
     text = f"Search results for '{query}' in {field} (up to {limit}):"
     for m in messages:
         status_icons = []
@@ -311,7 +320,7 @@ def cmd_search(args) -> None:
         if m["flagged"]:
             status_icons.append("FLAGGED")
         status_str = f" [{', '.join(status_icons)}]" if status_icons else ""
-        text += f"\n- [{m['id']}] {truncate(m['subject'], 50)}{status_str}"
+        text += f"\n- [{m['alias']}] {truncate(m['subject'], 50)}{status_str}"
         text += f"\n  From: {m['sender']}"
         text += f"\n  Date: {m['date']}"
         text += f"\n  Location: {m['mailbox']} [{m['account']}]"
