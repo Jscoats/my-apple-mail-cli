@@ -33,7 +33,7 @@ Issues = "https://github.com/Jscoats/mxctl/issues"
 Changelog = "https://github.com/Jscoats/mxctl/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "pre-commit"]
+dev = ["pytest", "pytest-cov", "ruff", "pre-commit"]
 
 [project.scripts]
 mxctl = "mxctl.main:main"
@@ -44,6 +44,13 @@ packages = ["src/mxctl"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["mxctl"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
 
 [tool.ruff]
 target-version = "py310"

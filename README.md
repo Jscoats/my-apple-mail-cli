@@ -2,13 +2,15 @@
 
 [![CI](https://github.com/Jscoats/mxctl/actions/workflows/ci.yml/badge.svg)](https://github.com/Jscoats/mxctl/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Coverage: 87%](https://img.shields.io/badge/coverage-87%25-yellowgreen.svg)](https://github.com/Jscoats/mxctl)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 > Apple Mail from your terminal.
 
+**49 commands.** Triage with AI, batch-process newsletters, turn emails into Todoist tasks — all from the terminal. Every command supports `--json` for scripting and AI workflows. Zero external dependencies.
+
 ## Table of Contents
 
-- [Why This Exists](#why-this-exists)
 - [Key Features](#key-features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
@@ -20,10 +22,6 @@
 - [Architecture](#architecture)
 - [Why Not X?](#why-not-x)
 - [Contributing](#contributing)
-
-## Why This Exists
-
-Use Apple Mail but want to automate it? This CLI gives you full control of Mail.app from the terminal. Every command outputs structured data that works with AI assistants, shell scripts, or status bars -- so you can triage your inbox with Claude, automate workflows with scripts, or batch-process newsletters without opening Mail.app.
 
 ## Key Features
 
