@@ -8,6 +8,8 @@ import argparse
 import json
 from unittest.mock import Mock
 
+import pytest
+
 from mxctl.config import FIELD_SEPARATOR, NOREPLY_PATTERNS
 from mxctl.util.mail_helpers import extract_email, normalize_subject
 
@@ -411,3 +413,302 @@ class TestCmdTriage:
         assert msg["flagged"] is True
         assert msg["id"] == 7
         assert msg["subject"] == "Important"
+
+
+# ===========================================================================
+# cmd_summary — empty inbox path (line 38 — blank line skip in summary)
+# ===========================================================================
+
+class TestCmdSummaryBlankLineSkip:
+    """Test that cmd_summary skips blank lines in output (line 38)."""
+
+    def test_summary_blank_line_in_output(self, monkeypatch, capsys):
+        """cmd_summary skips blank lines between valid messages."""
+        from mxctl.commands.mail.ai import cmd_summary
+
+        mock_run = Mock(return_value=(
+            f"iCloud{FIELD_SEPARATOR}100{FIELD_SEPARATOR}First{FIELD_SEPARATOR}a@b.com{FIELD_SEPARATOR}2026-01-01\n"
+            f"\n"
+            f"   \n"
+            f"iCloud{FIELD_SEPARATOR}101{FIELD_SEPARATOR}Second{FIELD_SEPARATOR}c@d.com{FIELD_SEPARATOR}2026-01-02\n"
+        ))
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "mxctl.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=20, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=False)
+        cmd_summary(args)
+
+        out = capsys.readouterr().out
+        assert "2 unread:" in out
+        assert "[1]" in out
+        assert "[2]" in out
+
+
+# ===========================================================================
+# cmd_triage — empty inbox and account filter (lines 67-68, 77)
+# ===========================================================================
+
+class TestCmdTriageEdgeCases:
+    """Additional coverage for cmd_triage edge cases."""
+
+    def test_triage_empty_inbox(self, monkeypatch, capsys):
+        """cmd_triage with empty result shows inbox zero message (lines 67-68)."""
+        from mxctl.commands.mail.ai import cmd_triage
+
+        mock_run = Mock(return_value="")
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "mxctl.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=30, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=False)
+        cmd_triage(args)
+
+        out = capsys.readouterr().out
+        assert "Inbox zero" in out or "No unread" in out
+
+    def test_triage_blank_line_skip(self, monkeypatch, capsys):
+        """cmd_triage skips blank lines in output (line 77)."""
+        from mxctl.commands.mail.ai import cmd_triage
+
+        # Put blank lines BETWEEN two valid lines so strip() doesn't remove them
+        mock_run = Mock(return_value=(
+            f"iCloud{FIELD_SEPARATOR}10{FIELD_SEPARATOR}Valid A{FIELD_SEPARATOR}p@p.com{FIELD_SEPARATOR}2026-01-01{FIELD_SEPARATOR}false\n"
+            f"\n"
+            f"  \n"
+            f"iCloud{FIELD_SEPARATOR}11{FIELD_SEPARATOR}Valid B{FIELD_SEPARATOR}q@q.com{FIELD_SEPARATOR}2026-01-02{FIELD_SEPARATOR}false\n"
+        ))
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+        monkeypatch.setattr(
+            "mxctl.commands.mail.ai.inbox_iterator_all_accounts",
+            lambda inner_ops, cap=30, account=None: "tell application \"Mail\"\nend tell",
+        )
+
+        args = argparse.Namespace(account=None, json=False)
+        cmd_triage(args)
+
+        out = capsys.readouterr().out
+        assert "Triage (2 unread):" in out
+
+    def test_triage_with_account_filter(self, monkeypatch, capsys):
+        """cmd_triage with -a flag passes account to inbox_iterator_all_accounts."""
+        from mxctl.commands.mail.ai import cmd_triage
+
+        mock_run = Mock(return_value=(
+            f"Work{FIELD_SEPARATOR}20{FIELD_SEPARATOR}Task{FIELD_SEPARATOR}boss@work.com{FIELD_SEPARATOR}2026-01-01{FIELD_SEPARATOR}false\n"
+        ))
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        captured_account = []
+        def mock_template(inner_ops, cap=30, account=None):
+            captured_account.append(account)
+            return "tell application \"Mail\"\nend tell"
+        monkeypatch.setattr(
+            "mxctl.commands.mail.ai.inbox_iterator_all_accounts",
+            mock_template,
+        )
+
+        args = argparse.Namespace(account="Work", json=False)
+        cmd_triage(args)
+
+        assert captured_account[0] == "Work"
+
+
+# ===========================================================================
+# cmd_context — edge cases (lines 127, 158, 168-169)
+# ===========================================================================
+
+class TestCmdContextEdgeCases:
+    """Coverage for cmd_context missing lines."""
+
+    def test_context_no_account_dies(self, monkeypatch):
+        """cmd_context without account dies (line 127)."""
+        from mxctl.commands.mail.ai import cmd_context
+
+        monkeypatch.setattr("mxctl.commands.mail.ai.resolve_account", lambda _: None)
+
+        args = argparse.Namespace(account=None, mailbox=None, id=100, limit=50, all_accounts=False, json=False)
+        with pytest.raises(SystemExit):
+            cmd_context(args)
+
+    def test_context_insufficient_parts_dies(self, monkeypatch):
+        """cmd_context with bad initial message fetch dies (line 158)."""
+        from mxctl.commands.mail.ai import cmd_context
+
+        mock_run = Mock(return_value="only-partial-data")
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(account="iCloud", mailbox="INBOX", id=100, limit=50, all_accounts=False, json=False)
+        with pytest.raises(SystemExit):
+            cmd_context(args)
+
+    def test_context_all_accounts_flag(self, monkeypatch, capsys):
+        """cmd_context --all-accounts uses 'every account' loop (lines 168-169)."""
+        from mxctl.commands.mail.ai import cmd_context
+        from mxctl.config import RECORD_SEPARATOR
+
+        # First call returns main message; second call returns thread
+        mock_run = Mock(side_effect=[
+            f"Subject{FIELD_SEPARATOR}sender@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}to@x.com{FIELD_SEPARATOR}Message body",
+            "",  # No thread messages
+        ])
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(account="iCloud", mailbox="INBOX", id=100, limit=50, all_accounts=True, json=False)
+        cmd_context(args)
+
+        # Second script should use "every account"
+        second_script = mock_run.call_args_list[1][0][0]
+        assert "every account" in second_script
+
+    def test_context_with_thread_entries(self, monkeypatch, capsys):
+        """cmd_context shows thread history when present."""
+        from mxctl.commands.mail.ai import cmd_context
+        from mxctl.config import RECORD_SEPARATOR
+
+        mock_run = Mock(side_effect=[
+            f"Meeting Notes{FIELD_SEPARATOR}alice@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}bob@x.com{FIELD_SEPARATOR}Main body",
+            (
+                f"200{FIELD_SEPARATOR}Re: Meeting Notes{FIELD_SEPARATOR}bob@x.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}Reply body"
+                + RECORD_SEPARATOR
+            ),
+        ])
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(account="iCloud", mailbox="INBOX", id=100, limit=50, all_accounts=False, json=False)
+        cmd_context(args)
+
+        captured = capsys.readouterr()
+        assert "Thread History" in captured.out
+        assert "Reply body" in captured.out
+
+    def test_context_json_output(self, monkeypatch, capsys):
+        """cmd_context --json returns structured data."""
+        from mxctl.commands.mail.ai import cmd_context
+
+        mock_run = Mock(side_effect=[
+            f"Subject{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}t@x.com{FIELD_SEPARATOR}Body here",
+            "",
+        ])
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(account="iCloud", mailbox="INBOX", id=100, limit=50, all_accounts=False, json=True)
+        cmd_context(args)
+
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert "message" in data
+        assert "thread" in data
+        assert data["message"]["subject"] == "Subject"
+
+
+# ===========================================================================
+# cmd_find_related — edge cases (lines 247-266, 301, 304, 324)
+# ===========================================================================
+
+class TestCmdFindRelatedEdgeCases:
+    """Coverage for cmd_find_related missing lines."""
+
+    def test_find_related_by_message_id(self, monkeypatch, capsys):
+        """cmd_find_related with numeric query looks up message first (lines 247-266)."""
+        from mxctl.commands.mail.ai import cmd_find_related
+
+        # First call: lookup message by ID; second call: search
+        mock_run = Mock(side_effect=[
+            f"Re: Project Update{FIELD_SEPARATOR}alice@x.com",  # lookup returns subject + sender
+            (
+                f"50{FIELD_SEPARATOR}Project Update{FIELD_SEPARATOR}alice@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+                f"51{FIELD_SEPARATOR}Re: Project Update{FIELD_SEPARATOR}bob@x.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            ),
+        ])
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(query="12345", json=False)
+        cmd_find_related(args)
+
+        captured = capsys.readouterr()
+        assert "conversations" in captured.out.lower()
+
+    def test_find_related_by_message_id_not_found(self, monkeypatch, capsys):
+        """cmd_find_related with numeric query where message is not found (lines 262-264)."""
+        from mxctl.commands.mail.ai import cmd_find_related
+
+        mock_run = Mock(return_value="")
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(query="99999", json=False)
+        cmd_find_related(args)
+
+        captured = capsys.readouterr()
+        assert "not found" in captured.out.lower()
+
+    def test_find_related_no_results(self, monkeypatch, capsys):
+        """cmd_find_related with no search results shows message."""
+        from mxctl.commands.mail.ai import cmd_find_related
+
+        mock_run = Mock(return_value="")
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(query="nonexistent topic", json=False)
+        cmd_find_related(args)
+
+        captured = capsys.readouterr()
+        assert "No messages found" in captured.out
+
+    def test_find_related_blank_line_skip(self, monkeypatch, capsys):
+        """cmd_find_related skips blank lines (line 301)."""
+        from mxctl.commands.mail.ai import cmd_find_related
+
+        # Put blank lines BETWEEN two valid lines
+        mock_run = Mock(return_value=(
+            f"60{FIELD_SEPARATOR}Topic{FIELD_SEPARATOR}a@b.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            f"\n"
+            f"  \n"
+            f"61{FIELD_SEPARATOR}Topic{FIELD_SEPARATOR}c@d.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+        ))
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(query="Topic", json=False)
+        cmd_find_related(args)
+
+        captured = capsys.readouterr()
+        assert "1 conversations" in captured.out
+
+    def test_find_related_malformed_line_skip(self, monkeypatch, capsys):
+        """cmd_find_related skips malformed lines (line 304)."""
+        from mxctl.commands.mail.ai import cmd_find_related
+
+        mock_run = Mock(return_value=(
+            f"70{FIELD_SEPARATOR}Good{FIELD_SEPARATOR}a@b.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            f"bad-line-no-separators\n"
+        ))
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(query="Good", json=False)
+        cmd_find_related(args)
+
+        captured = capsys.readouterr()
+        assert "1 conversations" in captured.out
+
+    def test_find_related_more_than_5_in_thread(self, monkeypatch, capsys):
+        """cmd_find_related shows '... and N more' for threads >5 messages (line 324)."""
+        from mxctl.commands.mail.ai import cmd_find_related
+
+        lines = ""
+        for i in range(8):
+            lines += (
+                f"{i}{FIELD_SEPARATOR}Same Topic{FIELD_SEPARATOR}s{i}@x.com{FIELD_SEPARATOR}"
+                f"Day {i}{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            )
+        mock_run = Mock(return_value=lines)
+        monkeypatch.setattr("mxctl.commands.mail.ai.run", mock_run)
+
+        args = argparse.Namespace(query="Same Topic", json=False)
+        cmd_find_related(args)
+
+        captured = capsys.readouterr()
+        assert "and 3 more" in captured.out

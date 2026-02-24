@@ -208,7 +208,7 @@ def cmd_stats(args) -> None:
 
         result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
         lines = result.strip().split("\n")
-        if not lines:
+        if not lines:  # pragma: no cover — str.split() always returns at least [""]
             scope = f"account '{account}'" if explicit_account else "any account"
             format_output(args, f"No mailboxes found in {scope}.",
                           json_data={"mailboxes": []})

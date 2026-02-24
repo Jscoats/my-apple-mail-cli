@@ -159,7 +159,7 @@ def cmd_undo(args) -> None:
 
     operations = fresh_ops if not force else all_ops
     if not operations:
-        die("No batch operations to undo.")
+        die("No batch operations to undo.")  # pragma: no cover — earlier guards catch all empty cases
 
     # Pop the most recent operation — do NOT write the log yet;
     # only commit removal after the restore work succeeds.

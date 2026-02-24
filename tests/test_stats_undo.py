@@ -415,6 +415,416 @@ class TestUndoStaleness:
         assert "Undid batch-move" in captured.out
 
 
+class TestEntryAgeFreshness:
+    """Tests for _entry_age_minutes and _is_fresh helper functions."""
+
+    def test_entry_age_minutes_no_timestamp(self):
+        """_entry_age_minutes returns None when timestamp is missing (line 26)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        result = undo_module._entry_age_minutes({})
+        assert result is None
+
+    def test_entry_age_minutes_invalid_timestamp(self):
+        """_entry_age_minutes returns None for garbage timestamp (lines 30-31)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        result = undo_module._entry_age_minutes({"timestamp": "not-a-date"})
+        assert result is None
+
+    def test_entry_age_minutes_valid_timestamp(self):
+        """_entry_age_minutes returns positive float for a recent timestamp."""
+        import mxctl.commands.mail.undo as undo_module
+
+        ts = datetime.now().isoformat()
+        result = undo_module._entry_age_minutes({"timestamp": ts})
+        assert result is not None
+        assert result >= 0
+
+    def test_is_fresh_no_timestamp_returns_false(self):
+        """_is_fresh returns False when age is None (line 38)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        result = undo_module._is_fresh({})
+        assert result is False
+
+    def test_is_fresh_stale_entry_returns_false(self):
+        """_is_fresh returns False for entry older than UNDO_MAX_AGE_MINUTES."""
+        import mxctl.commands.mail.undo as undo_module
+
+        stale_ts = (datetime.now() - timedelta(minutes=60)).isoformat()
+        result = undo_module._is_fresh({"timestamp": stale_ts})
+        assert result is False
+
+    def test_is_fresh_fresh_entry_returns_true(self):
+        """_is_fresh returns True for entry younger than UNDO_MAX_AGE_MINUTES."""
+        import mxctl.commands.mail.undo as undo_module
+
+        fresh_ts = datetime.now().isoformat()
+        result = undo_module._is_fresh({"timestamp": fresh_ts})
+        assert result is True
+
+
+class TestLoadUndoLogEdgeCases:
+    """Tests for _load_undo_log edge cases."""
+
+    def test_load_undo_log_invalid_json(self, tmp_path, monkeypatch):
+        """_load_undo_log returns [] for corrupted JSON (lines 53-54)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        test_log.write_text("{invalid json content!!")
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        result = undo_module._load_undo_log()
+        assert result == []
+
+    def test_load_undo_log_include_stale(self, tmp_path, monkeypatch):
+        """_load_undo_log(include_stale=True) returns stale entries too."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        stale_ts = (datetime.now() - timedelta(minutes=60)).isoformat()
+        test_log.write_text(json.dumps([{
+            "timestamp": stale_ts,
+            "operation": "batch-move",
+            "account": "iCloud",
+            "message_ids": [1],
+        }]))
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        # Without include_stale: empty (stale entry filtered)
+        result_fresh = undo_module._load_undo_log(include_stale=False)
+        assert len(result_fresh) == 0
+
+        # With include_stale: returns the entry
+        result_all = undo_module._load_undo_log(include_stale=True)
+        assert len(result_all) == 1
+
+
+class TestLogFenceOperation:
+    """Tests for log_fence_operation (lines 99-105)."""
+
+    def test_fence_operation_creates_fence_entry(self, tmp_path, monkeypatch):
+        """log_fence_operation creates a fence sentinel entry."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        undo_module.log_fence_operation("batch-read")
+
+        operations = undo_module._load_undo_log(include_stale=True)
+        assert len(operations) == 1
+        assert operations[0]["type"] == "fence"
+        assert operations[0]["operation"] == "batch-read"
+        assert "timestamp" in operations[0]
+
+
+class TestUndoListFences:
+    """Tests for cmd_undo_list with fence entries and mixed entries."""
+
+    def test_undo_list_shows_fence_as_no_undo(self, tmp_path, monkeypatch, mock_args, capsys):
+        """cmd_undo_list marks fence entries as [no undo] (lines 127, 131)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        # Create a normal operation first
+        undo_module.log_batch_operation(
+            operation_type="batch-move",
+            account="iCloud",
+            message_ids=[1, 2],
+            dest_mailbox="Archive",
+            sender="test@x.com",
+        )
+        # Then a fence
+        undo_module.log_fence_operation("batch-read")
+
+        args = mock_args(json=False)
+        undo_module.cmd_undo_list(args)
+
+        captured = capsys.readouterr()
+        assert "[no undo]" in captured.out
+        assert "batch-read" in captured.out
+        assert "batch-move" in captured.out
+
+    def test_undo_list_shows_older_than_days(self, tmp_path, monkeypatch, mock_args, capsys):
+        """cmd_undo_list shows older_than_days when present (line 131)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        undo_module.log_batch_operation(
+            operation_type="batch-delete",
+            account="iCloud",
+            message_ids=[1],
+            source_mailbox="INBOX",
+            older_than_days=30,
+        )
+
+        args = mock_args(json=False)
+        undo_module.cmd_undo_list(args)
+
+        captured = capsys.readouterr()
+        assert "older than 30 days" in captured.out
+
+
+class TestCmdUndoEdgeCases:
+    """Tests for cmd_undo edge cases — fences, empty logs, unknown ops."""
+
+    def test_undo_empty_log_dies(self, tmp_path, monkeypatch, mock_args):
+        """cmd_undo with empty log dies with message (line 147)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo-empty.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        args = mock_args(json=False, force=False)
+        with pytest.raises(SystemExit):
+            undo_module.cmd_undo(args)
+
+    def test_undo_fence_without_force_dies(self, tmp_path, monkeypatch, mock_args, capsys):
+        """cmd_undo on fence entry without --force dies with message (lines 170-176)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        undo_module.log_fence_operation("batch-flag")
+
+        args = mock_args(json=False, force=False)
+        with pytest.raises(SystemExit):
+            undo_module.cmd_undo(args)
+
+        captured = capsys.readouterr()
+        assert "batch-flag" in captured.err
+        assert "cannot be undone" in captured.err
+
+    def test_undo_fence_with_force_skips_to_next_entry(self, tmp_path, monkeypatch, mock_args, capsys):
+        """cmd_undo --force on fence pops it and executes next entry (lines 177-180)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        # Log an undoable operation, then a fence on top
+        undo_module.log_batch_operation(
+            operation_type="batch-move",
+            account="iCloud",
+            message_ids=[101],
+            dest_mailbox="Archive",
+            sender="s@x.com",
+        )
+        undo_module.log_fence_operation("batch-read")
+
+        mock_run = patch("mxctl.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.return_value = "1"
+            args = mock_args(json=False, force=True)
+            undo_module.cmd_undo(args)
+
+        captured = capsys.readouterr()
+        assert "Undid batch-move" in captured.out
+
+    def test_undo_fence_only_with_force_dies(self, tmp_path, monkeypatch, mock_args):
+        """cmd_undo --force with only a fence and nothing behind it dies (line 179)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        undo_module.log_fence_operation("batch-flag")
+
+        args = mock_args(json=False, force=True)
+        with pytest.raises(SystemExit):
+            undo_module.cmd_undo(args)
+
+    def test_undo_no_message_ids_dies(self, tmp_path, monkeypatch, mock_args):
+        """cmd_undo with empty message_ids dies (line 187)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        # Manually write an entry with empty message_ids
+        test_log.write_text(json.dumps([{
+            "timestamp": datetime.now().isoformat(),
+            "operation": "batch-move",
+            "account": "iCloud",
+            "message_ids": [],
+            "dest_mailbox": "Archive",
+        }]))
+
+        args = mock_args(json=False, force=False)
+        with pytest.raises(SystemExit):
+            undo_module.cmd_undo(args)
+
+    def test_undo_unknown_operation_type_dies(self, tmp_path, monkeypatch, mock_args):
+        """cmd_undo with unknown operation type dies (line 305)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        test_log.write_text(json.dumps([{
+            "timestamp": datetime.now().isoformat(),
+            "operation": "batch-unknown",
+            "account": "iCloud",
+            "message_ids": [1, 2],
+        }]))
+
+        args = mock_args(json=False, force=False)
+        with pytest.raises(SystemExit):
+            undo_module.cmd_undo(args)
+
+    def test_undo_batch_move_zero_restored(self, tmp_path, monkeypatch, mock_args, capsys):
+        """cmd_undo batch-move with 0 messages found shows 'Nothing to restore' (line 234)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        undo_module.log_batch_operation(
+            operation_type="batch-move",
+            account="iCloud",
+            message_ids=[101, 102],
+            dest_mailbox="Archive",
+            sender="s@x.com",
+        )
+
+        mock_run = patch("mxctl.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.return_value = "0"
+            args = mock_args(json=False, force=False)
+            undo_module.cmd_undo(args)
+
+        captured = capsys.readouterr()
+        assert "Nothing to restore" in captured.out
+
+    def test_undo_batch_move_no_dest_mailbox_dies(self, tmp_path, monkeypatch, mock_args):
+        """cmd_undo batch-move with no dest_mailbox dies (line 197)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        test_log.write_text(json.dumps([{
+            "timestamp": datetime.now().isoformat(),
+            "operation": "batch-move",
+            "account": "iCloud",
+            "message_ids": [1],
+            "dest_mailbox": None,
+        }]))
+
+        args = mock_args(json=False, force=False)
+        with pytest.raises(SystemExit):
+            undo_module.cmd_undo(args)
+
+    def test_undo_batch_delete_zero_restored(self, tmp_path, monkeypatch, mock_args, capsys):
+        """cmd_undo batch-delete with 0 found shows 'Nothing to restore' (line 285)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        undo_module.log_batch_operation(
+            operation_type="batch-delete",
+            account="iCloud",
+            message_ids=[201],
+            source_mailbox="INBOX",
+        )
+
+        mock_run = patch("mxctl.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.return_value = "0"
+            args = mock_args(json=False, force=False)
+            undo_module.cmd_undo(args)
+
+        captured = capsys.readouterr()
+        assert "Nothing to restore" in captured.out
+
+    def test_undo_batch_delete_no_source_mailbox_restores_to_inbox(self, tmp_path, monkeypatch, mock_args, capsys):
+        """cmd_undo batch-delete without source_mailbox restores to INBOX with note (lines 289, 300)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        test_log.write_text(json.dumps([{
+            "timestamp": datetime.now().isoformat(),
+            "operation": "batch-delete",
+            "account": "iCloud",
+            "message_ids": [301],
+            "source_mailbox": None,
+        }]))
+
+        mock_run = patch("mxctl.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.return_value = "1"
+            args = mock_args(json=False, force=False)
+            undo_module.cmd_undo(args)
+
+        captured = capsys.readouterr()
+        assert "INBOX" in captured.out
+        assert "Original mailbox unknown" in captured.out
+
+    def test_undo_restores_log_on_exception(self, tmp_path, monkeypatch, mock_args):
+        """cmd_undo restores the operation to the log if an exception occurs (lines 307-310)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        undo_module.log_batch_operation(
+            operation_type="batch-move",
+            account="iCloud",
+            message_ids=[401],
+            dest_mailbox="Archive",
+            sender="s@x.com",
+        )
+
+        mock_run = patch("mxctl.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.side_effect = RuntimeError("AppleScript error")
+            args = mock_args(json=False, force=False)
+            with pytest.raises(RuntimeError):
+                undo_module.cmd_undo(args)
+
+        # The operation should have been put back
+        operations = undo_module._load_undo_log()
+        assert len(operations) == 1
+        assert operations[0]["message_ids"] == [401]
+
+    def test_undo_force_with_no_fresh_uses_all_ops(self, tmp_path, monkeypatch, mock_args, capsys):
+        """cmd_undo --force with only stale entries uses all_ops (line 162)."""
+        import mxctl.commands.mail.undo as undo_module
+
+        test_log = tmp_path / "mail-undo.json"
+        monkeypatch.setattr(undo_module, "UNDO_LOG_FILE", str(test_log))
+
+        stale_ts = (datetime.now() - timedelta(minutes=60)).isoformat()
+        test_log.write_text(json.dumps([{
+            "timestamp": stale_ts,
+            "operation": "batch-move",
+            "account": "iCloud",
+            "message_ids": [501],
+            "dest_mailbox": "Archive",
+            "sender": "old@x.com",
+        }]))
+
+        mock_run = patch("mxctl.commands.mail.undo.run")
+        with mock_run as mocked:
+            mocked.return_value = "1"
+            args = mock_args(json=False, force=True)
+            undo_module.cmd_undo(args)
+
+        captured = capsys.readouterr()
+        assert "Undid batch-move" in captured.out
+
+
 class TestStatsAllAccountsFix:
     """Regression tests ensuring stats --all (without -a) hits all accounts."""
 

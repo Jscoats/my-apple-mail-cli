@@ -1605,3 +1605,319 @@ def test_cmd_check_applescript_calls_check_for_new_mail(monkeypatch, mock_args, 
 
     script_sent = mock_run.call_args[0][0]
     assert "check for new mail" in script_sent
+
+
+# ---------------------------------------------------------------------------
+# messages.py — coverage for missing lines
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_list_unread_filter(monkeypatch, mock_args, capsys):
+    """cmd_list --unread adds 'read status is false' filter clause (line 32)."""
+    from mxctl.commands.mail.messages import cmd_list
+
+    mock_run = Mock(return_value=(
+        f"10{FIELD_SEPARATOR}Unread Msg{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}"
+        f"Mon{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false\n"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(unread=True)
+    cmd_list(args)
+
+    script = mock_run.call_args[0][0]
+    assert "read status is false" in script
+
+    captured = capsys.readouterr()
+    assert "Unread Msg" in captured.out
+
+
+def test_cmd_list_after_filter(monkeypatch, mock_args, capsys):
+    """cmd_list --after adds date received >= filter clause (lines 34-35)."""
+    from mxctl.commands.mail.messages import cmd_list
+
+    mock_run = Mock(return_value=(
+        f"11{FIELD_SEPARATOR}Recent{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}"
+        f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false\n"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(after="2026-01-01", before=None)
+    cmd_list(args)
+
+    script = mock_run.call_args[0][0]
+    assert "date received >=" in script
+
+
+def test_cmd_list_before_filter(monkeypatch, mock_args, capsys):
+    """cmd_list --before adds date received < filter clause (lines 37-38)."""
+    from mxctl.commands.mail.messages import cmd_list
+
+    mock_run = Mock(return_value=(
+        f"12{FIELD_SEPARATOR}Old{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}"
+        f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false\n"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(after=None, before="2026-02-01")
+    cmd_list(args)
+
+    script = mock_run.call_args[0][0]
+    assert "date received <" in script
+
+
+def test_cmd_list_empty_unread_filter_message(monkeypatch, mock_args, capsys):
+    """cmd_list with --unread and empty result shows descriptive filter (lines 63-72)."""
+    from mxctl.commands.mail.messages import cmd_list
+
+    mock_run = Mock(return_value="")
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(unread=True, after=None, before=None)
+    cmd_list(args)
+
+    captured = capsys.readouterr()
+    assert "No messages found" in captured.out
+    assert "unread" in captured.out
+
+
+def test_cmd_list_empty_date_filter_message(monkeypatch, mock_args, capsys):
+    """cmd_list with --after/--before and empty result includes date range in message (lines 63-72)."""
+    from mxctl.commands.mail.messages import cmd_list
+
+    mock_run = Mock(return_value="")
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(unread=False, after="2026-01-01", before="2026-01-31")
+    cmd_list(args)
+
+    captured = capsys.readouterr()
+    assert "No messages found" in captured.out
+    assert "from 2026-01-01" in captured.out
+    assert "to 2026-01-31" in captured.out
+
+
+def test_cmd_list_empty_no_filters(monkeypatch, mock_args, capsys):
+    """cmd_list with no filters and empty result shows plain message."""
+    from mxctl.commands.mail.messages import cmd_list
+
+    mock_run = Mock(return_value="  \n  ")
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(unread=False, after=None, before=None)
+    cmd_list(args)
+
+    captured = capsys.readouterr()
+    assert "No messages found in INBOX" in captured.out
+
+
+def test_cmd_list_skips_blank_lines(monkeypatch, mock_args, capsys):
+    """cmd_list skips blank lines in AppleScript output (line 78)."""
+    from mxctl.commands.mail.messages import cmd_list
+
+    mock_run = Mock(return_value=(
+        f"10{FIELD_SEPARATOR}Good{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false\n"
+        f"\n"
+        f"   \n"
+        f"11{FIELD_SEPARATOR}Also Good{FIELD_SEPARATOR}t@x.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false\n"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(unread=False, after=None, before=None)
+    cmd_list(args)
+
+    captured = capsys.readouterr()
+    assert "[1] Good" in captured.out
+    assert "[2] Also Good" in captured.out
+
+
+def test_cmd_read_insufficient_parts_fallback(monkeypatch, mock_args, capsys):
+    """cmd_read with fewer than 16 parts shows raw result (lines 156-157)."""
+    from mxctl.commands.mail.messages import cmd_read
+
+    mock_run = Mock(return_value="partial data only")
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(id=999, short=False)
+    cmd_read(args)
+
+    captured = capsys.readouterr()
+    assert "Message details: partial data only" in captured.out
+
+
+def test_cmd_search_account_only_no_mailbox(monkeypatch, mock_args, capsys):
+    """cmd_search with account but no mailbox uses account-scoped multi-mailbox script (lines 243-264)."""
+    from mxctl.commands.mail.messages import cmd_search
+
+    mock_run = Mock(return_value=(
+        f"50{FIELD_SEPARATOR}Found{FIELD_SEPARATOR}a@b.com{FIELD_SEPARATOR}"
+        f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(query="test", sender=False, mailbox=None, limit=25)
+    cmd_search(args)
+
+    script = mock_run.call_args[0][0]
+    # Account-only branch iterates mailboxes of a specific account
+    assert "every mailbox of acct" in script
+    assert 'account "iCloud"' in script
+
+    captured = capsys.readouterr()
+    assert "Found" in captured.out
+
+
+def test_cmd_search_no_account_no_mailbox_all_accounts(monkeypatch, capsys):
+    """cmd_search with no account/no mailbox uses all-accounts script (lines 264+)."""
+    from argparse import Namespace
+
+    from mxctl.commands.mail.messages import cmd_search
+
+    mock_run = Mock(return_value=(
+        f"60{FIELD_SEPARATOR}Global{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}"
+        f"Mon{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}Gmail\n"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+    monkeypatch.setattr("mxctl.commands.mail.messages.resolve_account", lambda _: None)
+
+    args = Namespace(query="test", sender=False, account=None, mailbox=None, limit=25, json=False)
+    cmd_search(args)
+
+    script = mock_run.call_args[0][0]
+    assert "every account" in script
+
+    captured = capsys.readouterr()
+    assert "Global" in captured.out
+
+
+def test_cmd_search_sender_flag(monkeypatch, mock_args, capsys):
+    """cmd_search --sender searches by sender field instead of subject."""
+    from mxctl.commands.mail.messages import cmd_search
+
+    mock_run = Mock(return_value=(
+        f"70{FIELD_SEPARATOR}Match{FIELD_SEPARATOR}alice@test.com{FIELD_SEPARATOR}"
+        f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(query="alice", sender=True, mailbox="INBOX", limit=25)
+    cmd_search(args)
+
+    script = mock_run.call_args[0][0]
+    assert "sender contains" in script
+
+    captured = capsys.readouterr()
+    assert "in sender" in captured.out
+
+
+def test_cmd_search_empty_result_with_account(monkeypatch, mock_args, capsys):
+    """cmd_search empty result with account shows scoped message (lines 289-295)."""
+    from mxctl.commands.mail.messages import cmd_search
+
+    mock_run = Mock(return_value="")
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(query="missing", sender=False, mailbox=None, limit=25)
+    cmd_search(args)
+
+    captured = capsys.readouterr()
+    assert "No messages found matching 'missing'" in captured.out
+    assert "iCloud" in captured.out
+
+
+def test_cmd_search_empty_result_with_mailbox_and_account(monkeypatch, mock_args, capsys):
+    """cmd_search empty result with mailbox+account shows full scope (lines 289-295)."""
+    from mxctl.commands.mail.messages import cmd_search
+
+    mock_run = Mock(return_value="")
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(query="missing", sender=False, mailbox="Sent Messages", limit=25)
+    cmd_search(args)
+
+    captured = capsys.readouterr()
+    assert "No messages found" in captured.out
+    assert "Sent Messages" in captured.out
+    assert "iCloud" in captured.out
+
+
+def test_cmd_search_empty_result_no_account(monkeypatch, capsys):
+    """cmd_search empty result with no account shows unscoped message (lines 289-295)."""
+    from argparse import Namespace
+
+    from mxctl.commands.mail.messages import cmd_search
+
+    mock_run = Mock(return_value="")
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+    monkeypatch.setattr("mxctl.commands.mail.messages.resolve_account", lambda _: None)
+
+    args = Namespace(query="nothing", sender=False, account=None, mailbox=None, limit=25, json=False)
+    cmd_search(args)
+
+    captured = capsys.readouterr()
+    assert "No messages found matching 'nothing'" in captured.out
+
+
+def test_cmd_search_skips_blank_lines(monkeypatch, mock_args, capsys):
+    """cmd_search skips blank lines in results (line 301)."""
+    from mxctl.commands.mail.messages import cmd_search
+
+    # Blank lines BETWEEN two valid lines
+    mock_run = Mock(return_value=(
+        f"80{FIELD_SEPARATOR}Valid{FIELD_SEPARATOR}v@x.com{FIELD_SEPARATOR}"
+        f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+        f"\n"
+        f"  \n"
+        f"81{FIELD_SEPARATOR}Also Valid{FIELD_SEPARATOR}w@x.com{FIELD_SEPARATOR}"
+        f"Tue{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(query="valid", sender=False, mailbox="INBOX", limit=25)
+    cmd_search(args)
+
+    captured = capsys.readouterr()
+    assert "[1] Valid" in captured.out
+    assert "[2] Also Valid" in captured.out
+
+
+def test_cmd_search_unread_and_flagged_status(monkeypatch, mock_args, capsys):
+    """cmd_search shows UNREAD and FLAGGED status icons (lines 318, 320)."""
+    from mxctl.commands.mail.messages import cmd_search
+
+    mock_run = Mock(return_value=(
+        f"90{FIELD_SEPARATOR}Unread Flagged{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}"
+        f"Mon{FIELD_SEPARATOR}false{FIELD_SEPARATOR}true{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(query="test", sender=False, mailbox="INBOX", limit=25)
+    cmd_search(args)
+
+    captured = capsys.readouterr()
+    assert "UNREAD" in captured.out
+    assert "FLAGGED" in captured.out
+
+
+def test_cmd_read_short_flag(monkeypatch, mock_args, capsys):
+    """cmd_read --short truncates body to 500 chars."""
+    from mxctl.commands.mail.messages import cmd_read
+
+    long_body = "A" * 1000
+    mock_run = Mock(return_value=(
+        f"123{FIELD_SEPARATOR}msg-id{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}"
+        f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}"
+        f"false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}"
+        f"to@ex.com,{FIELD_SEPARATOR}{FIELD_SEPARATOR}{FIELD_SEPARATOR}"
+        f"{long_body}{FIELD_SEPARATOR}0"
+    ))
+    monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
+
+    args = mock_args(id=123, short=True)
+    cmd_read(args)
+
+    captured = capsys.readouterr()
+    # Body should be truncated with ellipsis (500 chars => 497 + "...")
+    assert "..." in captured.out
+    # Full 1000-char body should NOT appear
+    assert long_body not in captured.out

@@ -3,6 +3,8 @@
 Covers:
 - extract_display_name() helper (mail_helpers.py)
 - --version flag (main.py)
+- main() dispatch, no-func, KeyboardInterrupt (main.py)
+- __main__.py module entry point
 - resolve_message_context() improved init-error paths
 - _warn_automation_once() (applescript.py)
 - Edge cases / empty paths for cmd_thread, cmd_reply, cmd_forward
@@ -15,6 +17,8 @@ Covers:
 """
 
 import json
+import subprocess
+import sys
 from argparse import Namespace
 from unittest.mock import Mock, patch
 
@@ -113,6 +117,116 @@ class TestVersionFlag:
         captured = capsys.readouterr()
         combined = captured.out + captured.err
         assert __version__ in combined
+
+
+# ===========================================================================
+# main() dispatch paths — main.py lines 77-89
+# ===========================================================================
+
+class TestMainDispatch:
+    """Test main() command dispatch, no-command help, and KeyboardInterrupt."""
+
+    def test_no_command_prints_help_and_exits(self, capsys):
+        """No subcommand given — prints help and exits 0."""
+        from mxctl.main import main
+
+        with pytest.raises(SystemExit) as exc_info, patch("sys.argv", ["mxctl"]):
+            main()
+        assert exc_info.value.code == 0
+
+        captured = capsys.readouterr()
+        assert "Commands by category" in captured.out
+
+    def test_command_dispatches_to_func(self, monkeypatch):
+        """A valid subcommand dispatches to args.func(args)."""
+        from mxctl.main import main
+
+        called_with = []
+
+        def fake_func(args):
+            called_with.append(args)
+
+        # Patch parse_args to return an args object with func set
+        def fake_parse_args(self, args=None):
+            ns = Namespace(command="init", func=fake_func)
+            return ns
+
+        import argparse
+        monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse_args)
+
+        main()
+        assert len(called_with) == 1
+        assert called_with[0].command == "init"
+
+    def test_command_without_func_shows_subcommand_help(self, monkeypatch, capsys):
+        """Subcommand with no func attribute falls back to subcommand --help."""
+        from mxctl.main import main
+
+        # Patch parse_args to return an args object without func
+        def fake_parse_args(self, args=None):
+            if args and args == ["templates", "--help"]:
+                raise SystemExit(0)
+            return Namespace(command="templates")
+
+        import argparse
+        monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse_args)
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 0
+
+    def test_keyboard_interrupt_exits_130(self, monkeypatch, capsys):
+        """KeyboardInterrupt during dispatch exits with code 130."""
+        from mxctl.main import main
+
+        def raise_interrupt(args):
+            raise KeyboardInterrupt
+
+        def fake_parse_args(self, args=None):
+            return Namespace(command="init", func=raise_interrupt)
+
+        import argparse
+        monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse_args)
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+        assert exc_info.value.code == 130
+
+        captured = capsys.readouterr()
+        assert "Cancelled" in captured.err
+
+
+# ===========================================================================
+# __main__.py — module entry point
+# ===========================================================================
+
+class TestDunderMain:
+    """Test that python -m mxctl works."""
+
+    def test_dunder_main_calls_main(self, monkeypatch):
+        """Importing __main__ calls main()."""
+        import importlib
+
+        called = []
+        monkeypatch.setattr("mxctl.main.main", lambda: called.append(True))
+
+        # Remove cached module so it re-executes
+        if "mxctl.__main__" in sys.modules:
+            del sys.modules["mxctl.__main__"]
+
+        importlib.import_module("mxctl.__main__")
+        assert len(called) == 1
+
+    def test_python_m_mxctl_version(self):
+        """python -m mxctl --version succeeds."""
+        result = subprocess.run(
+            [sys.executable, "-m", "mxctl", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0
+        assert "mxctl" in result.stdout
 
 
 # ===========================================================================

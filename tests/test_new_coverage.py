@@ -1167,3 +1167,409 @@ class TestNotJunkSubjectSenderSearch:
         assert call_kwargs.kwargs.get("subject") == "My Subject" or \
                (len(call_kwargs[1]) > 0 and call_kwargs[1].get("subject") == "My Subject")
         assert "alice@example.com" in str(call_kwargs)
+
+
+# ===========================================================================
+# inbox_tools.py — additional coverage for missing lines
+# ===========================================================================
+
+class TestProcessInboxWithAccount:
+    """Tests for process-inbox -a flag (line 67) and category edge cases."""
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_process_inbox_with_account_flag(self, mock_run, capsys, mock_args):
+        """process-inbox with -a uses single-account script (line 67)."""
+        from mxctl.commands.mail.inbox_tools import cmd_process_inbox
+
+        row = (
+            f"iCloud{FIELD_SEPARATOR}101{FIELD_SEPARATOR}"
+            f"Test{FIELD_SEPARATOR}friend@gmail.com{FIELD_SEPARATOR}"
+            f"Mon{FIELD_SEPARATOR}false"
+        )
+        mock_run.return_value = row + "\n"
+
+        # pass account=None to bypass resolve_account (the function reads raw args.account)
+        args = _make_args(account="iCloud", limit=50)
+        cmd_process_inbox(args)
+
+        script = mock_run.call_args[0][0]
+        assert 'account "iCloud"' in script
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_process_inbox_flagged_more_than_5(self, mock_run, capsys, mock_args):
+        """process-inbox shows '... and N more' for >5 flagged messages (line 211)."""
+        from mxctl.commands.mail.inbox_tools import cmd_process_inbox
+
+        rows = ""
+        for i in range(8):
+            rows += (
+                f"iCloud{FIELD_SEPARATOR}{i}{FIELD_SEPARATOR}"
+                f"Flagged {i}{FIELD_SEPARATOR}boss@co.com{FIELD_SEPARATOR}"
+                f"Mon{FIELD_SEPARATOR}true\n"
+            )
+        mock_run.return_value = rows
+
+        args = _make_args(account=None, limit=50)
+        cmd_process_inbox(args)
+
+        out = capsys.readouterr().out
+        assert "FLAGGED (8)" in out
+        assert "and 3 more" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_process_inbox_people_more_than_5(self, mock_run, capsys, mock_args):
+        """process-inbox shows '... and N more' for >5 people messages (line 222)."""
+        from mxctl.commands.mail.inbox_tools import cmd_process_inbox
+
+        rows = ""
+        for i in range(7):
+            rows += (
+                f"iCloud{FIELD_SEPARATOR}{100+i}{FIELD_SEPARATOR}"
+                f"Person {i}{FIELD_SEPARATOR}p{i}@gmail.com{FIELD_SEPARATOR}"
+                f"Mon{FIELD_SEPARATOR}false\n"
+            )
+        mock_run.return_value = rows
+
+        args = _make_args(account=None, limit=50)
+        cmd_process_inbox(args)
+
+        out = capsys.readouterr().out
+        assert "PEOPLE (7)" in out
+        assert "and 2 more" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_process_inbox_notifications_more_than_5(self, mock_run, capsys, mock_args):
+        """process-inbox shows '... and N more' for >5 notification messages (line 233)."""
+        from mxctl.commands.mail.inbox_tools import cmd_process_inbox
+
+        rows = ""
+        for i in range(6):
+            rows += (
+                f"iCloud{FIELD_SEPARATOR}{200+i}{FIELD_SEPARATOR}"
+                f"Notification {i}{FIELD_SEPARATOR}noreply@service{i}.com{FIELD_SEPARATOR}"
+                f"Mon{FIELD_SEPARATOR}false\n"
+            )
+        mock_run.return_value = rows
+
+        args = _make_args(account=None, limit=50)
+        cmd_process_inbox(args)
+
+        out = capsys.readouterr().out
+        assert "NOTIFICATIONS (6)" in out
+        assert "and 1 more" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_process_inbox_blank_line_skip(self, mock_run, capsys, mock_args):
+        """process-inbox skips blank lines in output (line 183)."""
+        from mxctl.commands.mail.inbox_tools import cmd_process_inbox
+
+        good1 = (
+            f"iCloud{FIELD_SEPARATOR}10{FIELD_SEPARATOR}"
+            f"Hello{FIELD_SEPARATOR}alice@example.com{FIELD_SEPARATOR}"
+            f"Mon{FIELD_SEPARATOR}false"
+        )
+        good2 = (
+            f"iCloud{FIELD_SEPARATOR}11{FIELD_SEPARATOR}"
+            f"World{FIELD_SEPARATOR}bob@example.com{FIELD_SEPARATOR}"
+            f"Tue{FIELD_SEPARATOR}false"
+        )
+        # Blank lines BETWEEN two valid lines
+        mock_run.return_value = good1 + "\n\n  \n" + good2 + "\n"
+
+        args = _make_args(account=None, limit=50)
+        cmd_process_inbox(args)
+
+        out = capsys.readouterr().out
+        assert "PEOPLE (2)" in out
+
+
+class TestCleanNewslettersEdgeCases:
+    """Additional coverage for clean-newsletters."""
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_clean_newsletters_no_account_scope_message(self, mock_run, capsys, mock_args):
+        """clean-newsletters with no account shows 'across all accounts' (line 268)."""
+        from mxctl.commands.mail.inbox_tools import cmd_clean_newsletters
+
+        mock_run.return_value = ""
+        monkeypatch_needed = False  # resolve_account returns "iCloud" by default from mock_args
+        args = _make_args(account=None, mailbox="INBOX", limit=200)
+        # Patch resolve_account to return None
+        with patch("mxctl.commands.mail.inbox_tools.resolve_account", return_value=None):
+            cmd_clean_newsletters(args)
+
+        out = capsys.readouterr().out
+        assert "all accounts" in out.lower()
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_clean_newsletters_with_account_uses_single_script(self, mock_run, capsys, mock_args):
+        """clean-newsletters with account uses single-account script (line 127)."""
+        from mxctl.commands.mail.inbox_tools import cmd_clean_newsletters
+
+        rows = "\n".join(
+            f"noreply@news.com{FIELD_SEPARATOR}true" for _ in range(3)
+        )
+        mock_run.return_value = rows + "\n"
+
+        args = _make_args(account="iCloud", mailbox="INBOX", limit=200)
+        cmd_clean_newsletters(args)
+
+        script = mock_run.call_args[0][0]
+        assert 'account "iCloud"' in script
+        assert "every account" not in script
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_clean_newsletters_blank_line_skip(self, mock_run, capsys, mock_args):
+        """clean-newsletters skips blank lines in output (line 268 area)."""
+        from mxctl.commands.mail.inbox_tools import cmd_clean_newsletters
+
+        rows = (
+            f"noreply@news.com{FIELD_SEPARATOR}true\n"
+            f"\n"
+            f"noreply@news.com{FIELD_SEPARATOR}false\n"
+            f"  \n"
+        )
+        mock_run.return_value = rows
+
+        args = _make_args(account="iCloud", mailbox="INBOX", limit=200)
+        cmd_clean_newsletters(args)
+
+        out = capsys.readouterr().out
+        assert "noreply@news.com" in out
+
+
+class TestWeeklyReviewEdgeCases:
+    """Additional coverage for weekly-review missing lines."""
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_blank_lines_in_flagged(self, mock_run, capsys, mock_args):
+        """weekly-review skips blank lines in flagged results (line 378)."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        flagged_row1 = (
+            f"111{FIELD_SEPARATOR}Action Required{FIELD_SEPARATOR}"
+            f"boss@work.com{FIELD_SEPARATOR}Mon Jan 01 2026"
+        )
+        flagged_row2 = (
+            f"112{FIELD_SEPARATOR}Also Important{FIELD_SEPARATOR}"
+            f"ceo@work.com{FIELD_SEPARATOR}Tue Jan 02 2026"
+        )
+        mock_run.side_effect = [
+            flagged_row1 + "\n\n  \n" + flagged_row2 + "\n",  # flagged with blank lines between
+            "",                                                 # attachments
+            "",                                                 # unreplied
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "Action Required" in out
+        assert "Flagged Messages (2)" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_blank_lines_in_attachments(self, mock_run, capsys, mock_args):
+        """weekly-review skips blank lines in attachment results (line 388)."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        attach_row1 = (
+            f"222{FIELD_SEPARATOR}Budget{FIELD_SEPARATOR}"
+            f"finance@corp.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}3"
+        )
+        attach_row2 = (
+            f"223{FIELD_SEPARATOR}Report{FIELD_SEPARATOR}"
+            f"hr@corp.com{FIELD_SEPARATOR}Wed{FIELD_SEPARATOR}1"
+        )
+        mock_run.side_effect = [
+            "",                                                   # flagged
+            attach_row1 + "\n\n" + attach_row2 + "\n",           # attachments with blank between
+            "",                                                   # unreplied
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "Budget" in out
+        assert "Messages with Attachments (2)" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_blank_lines_in_unreplied(self, mock_run, capsys, mock_args):
+        """weekly-review skips blank lines in unreplied results (line 399)."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        unreplied_row1 = (
+            f"333{FIELD_SEPARATOR}Follow Up{FIELD_SEPARATOR}"
+            f"colleague@work.com{FIELD_SEPARATOR}Wed"
+        )
+        unreplied_row2 = (
+            f"334{FIELD_SEPARATOR}Check In{FIELD_SEPARATOR}"
+            f"friend@gmail.com{FIELD_SEPARATOR}Thu"
+        )
+        mock_run.side_effect = [
+            "",                                                       # flagged
+            "",                                                       # attachments
+            unreplied_row1 + "\n\n  \n" + unreplied_row2 + "\n",     # unreplied with blanks between
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "Follow Up" in out
+        assert "Unreplied from People (2)" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_malformed_unreplied_line_skipped(self, mock_run, capsys, mock_args):
+        """weekly-review skips malformed lines in unreplied (line 402)."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        mock_run.side_effect = [
+            "",                       # flagged
+            "",                       # attachments
+            "bad-line-no-sep\n",      # unreplied — malformed
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "Unreplied from People (0)" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_unreplied_filters_noreply(self, mock_run, capsys, mock_args):
+        """weekly-review filters out noreply senders from unreplied (line 406)."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        # One noreply sender, one real person
+        noreply_row = (
+            f"444{FIELD_SEPARATOR}Auto Notification{FIELD_SEPARATOR}"
+            f"noreply@service.com{FIELD_SEPARATOR}Thu"
+        )
+        person_row = (
+            f"445{FIELD_SEPARATOR}Real Question{FIELD_SEPARATOR}"
+            f"colleague@work.com{FIELD_SEPARATOR}Thu"
+        )
+        mock_run.side_effect = [
+            "",                                        # flagged
+            "",                                        # attachments
+            noreply_row + "\n" + person_row + "\n",    # unreplied
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "Unreplied from People (1)" in out
+        assert "Real Question" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_flagged_more_than_10(self, mock_run, capsys, mock_args):
+        """weekly-review shows '... and N more' for >10 flagged messages (line 425)."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        rows = ""
+        for i in range(12):
+            rows += (
+                f"{i}{FIELD_SEPARATOR}Flag {i}{FIELD_SEPARATOR}"
+                f"s{i}@x.com{FIELD_SEPARATOR}Mon\n"
+            )
+        mock_run.side_effect = [
+            rows,   # flagged
+            "",     # attachments
+            "",     # unreplied
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "and 2 more" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_attachments_more_than_10(self, mock_run, capsys, mock_args):
+        """weekly-review shows '... and N more' for >10 attachment messages (line 436)."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        rows = ""
+        for i in range(11):
+            rows += (
+                f"{i}{FIELD_SEPARATOR}Attach {i}{FIELD_SEPARATOR}"
+                f"s{i}@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}2\n"
+            )
+        mock_run.side_effect = [
+            "",     # flagged
+            rows,   # attachments
+            "",     # unreplied
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "and 1 more" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_unreplied_more_than_10(self, mock_run, capsys, mock_args):
+        """weekly-review shows '... and N more' for >10 unreplied messages (lines 443-447)."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        rows = ""
+        for i in range(13):
+            rows += (
+                f"{i}{FIELD_SEPARATOR}Reply {i}{FIELD_SEPARATOR}"
+                f"p{i}@gmail.com{FIELD_SEPARATOR}Mon\n"
+            )
+        mock_run.side_effect = [
+            "",     # flagged
+            "",     # attachments
+            rows,   # unreplied
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "and 3 more" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_suggested_actions_unreplied(self, mock_run, capsys, mock_args):
+        """weekly-review shows 'Reply to pending messages' when unreplied exist (line 456)."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        person_row = (
+            f"500{FIELD_SEPARATOR}Need Response{FIELD_SEPARATOR}"
+            f"colleague@work.com{FIELD_SEPARATOR}Mon"
+        )
+        mock_run.side_effect = [
+            "",                      # flagged
+            "",                      # attachments
+            person_row + "\n",       # unreplied
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "Reply to pending" in out
+
+    @patch("mxctl.commands.mail.inbox_tools.run")
+    def test_weekly_review_suggested_actions_attachments(self, mock_run, capsys, mock_args):
+        """weekly-review shows attachment review suggestion when attachments exist."""
+        from mxctl.commands.mail.inbox_tools import cmd_weekly_review
+
+        attach_row = (
+            f"600{FIELD_SEPARATOR}Invoice{FIELD_SEPARATOR}"
+            f"billing@corp.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}1"
+        )
+        mock_run.side_effect = [
+            "",                      # flagged
+            attach_row + "\n",       # attachments
+            "",                      # unreplied
+        ]
+
+        args = mock_args(days=7)
+        cmd_weekly_review(args)
+
+        out = capsys.readouterr().out
+        assert "save-attachment" in out or "Review and save" in out

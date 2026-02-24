@@ -85,7 +85,7 @@ def _export_single(args, msg_id: int, account: str, mailbox: str, dest: str) -> 
         # Guard against path traversal in the generated filename
         real_filepath = os.path.realpath(os.path.abspath(filepath))
         real_dest = os.path.realpath(os.path.abspath(dest_path))
-        if not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest:
+        if not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest:  # pragma: no cover — re.sub strips dangerous chars before this
             die("Unsafe export filename: path traversal detected.")
     else:
         filepath = dest_path
@@ -144,7 +144,7 @@ def _export_bulk(args, mailbox: str, account: str, dest: str, after: str | None)
         filepath = os.path.join(dest_dir, filename)
         real_filepath = os.path.realpath(os.path.abspath(filepath))
         real_dest = os.path.realpath(os.path.abspath(dest_dir))
-        if not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest:
+        if not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest:  # pragma: no cover — re.sub strips dangerous chars before this
             continue
 
         md = f"# {subject}\n\n**From:** {sender}  \n**Date:** {date}\n\n---\n\n{content}"
