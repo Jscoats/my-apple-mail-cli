@@ -6,7 +6,7 @@
   <a href="https://pypi.org/project/mxctl/"><img src="https://img.shields.io/pypi/v/mxctl.svg" alt="PyPI"></a>
   <a href="https://github.com/Jscoats/mxctl/actions/workflows/ci.yml"><img src="https://github.com/Jscoats/mxctl/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+"></a>
-  <a href="https://github.com/Jscoats/mxctl"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 87%"></a>
+  <a href="https://github.com/Jscoats/mxctl"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage: 100%"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
 </p>
 
