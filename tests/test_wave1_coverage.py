@@ -28,6 +28,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _args(**kwargs):
     defaults = {
         "json": False,
@@ -42,47 +43,56 @@ def _args(**kwargs):
 # extract_display_name() — mail_helpers.py
 # ===========================================================================
 
+
 class TestExtractDisplayName:
     """Unit tests for extract_display_name()."""
 
     def test_quoted_name_with_angle_brackets(self):
         from mxctl.util.mail_helpers import extract_display_name
+
         result = extract_display_name('"John Doe" <john@example.com>')
         assert result == "John Doe"
 
     def test_unquoted_name_with_angle_brackets(self):
         from mxctl.util.mail_helpers import extract_display_name
+
         result = extract_display_name("John Doe <john@example.com>")
         assert result == "John Doe"
 
     def test_bare_email_returns_email(self):
         from mxctl.util.mail_helpers import extract_display_name
+
         result = extract_display_name("jane@example.com")
         assert result == "jane@example.com"
 
     def test_angle_bracket_only_no_name(self):
         from mxctl.util.mail_helpers import extract_display_name
+
         result = extract_display_name("<admin@site.org>")
         # No name before <, so returns empty string stripped
         assert result == ""
 
     def test_empty_string(self):
         from mxctl.util.mail_helpers import extract_display_name
+
         result = extract_display_name("")
         assert result == ""
 
     def test_trailing_whitespace_stripped(self):
         from mxctl.util.mail_helpers import extract_display_name
+
         result = extract_display_name("  Alice Smith  <alice@example.com>")
         assert result == "Alice Smith"
 
     def test_quoted_name_strips_quotes(self):
         from mxctl.util.mail_helpers import extract_display_name
+
         result = extract_display_name('"Support Team" <support@company.com>')
         assert result == "Support Team"
 
     def test_multiword_name(self):
         from mxctl.util.mail_helpers import extract_display_name
+
         result = extract_display_name("Mary Jane Watson <mj@example.com>")
         assert result == "Mary Jane Watson"
 
@@ -91,11 +101,13 @@ class TestExtractDisplayName:
 # --version flag — main.py
 # ===========================================================================
 
+
 class TestVersionFlag:
     """Test that --version exits with the correct version string."""
 
     def test_version_flag_exits(self):
         from mxctl.main import main
+
         with pytest.raises(SystemExit) as exc_info, patch("sys.argv", ["mxctl", "--version"]):
             main()
         # argparse --version exits with code 0
@@ -103,6 +115,7 @@ class TestVersionFlag:
 
     def test_version_flag_output(self, capsys):
         from mxctl.main import main
+
         with pytest.raises(SystemExit), patch("sys.argv", ["mxctl", "--version"]):
             main()
         captured = capsys.readouterr()
@@ -112,6 +125,7 @@ class TestVersionFlag:
     def test_version_includes_semver(self, capsys):
         from mxctl import __version__
         from mxctl.main import main
+
         with pytest.raises(SystemExit), patch("sys.argv", ["mxctl", "--version"]):
             main()
         captured = capsys.readouterr()
@@ -122,6 +136,7 @@ class TestVersionFlag:
 # ===========================================================================
 # main() dispatch paths — main.py lines 77-89
 # ===========================================================================
+
 
 class TestMainDispatch:
     """Test main() command dispatch, no-command help, and KeyboardInterrupt."""
@@ -152,6 +167,7 @@ class TestMainDispatch:
             return ns
 
         import argparse
+
         monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse_args)
 
         main()
@@ -169,6 +185,7 @@ class TestMainDispatch:
             return Namespace(command="templates")
 
         import argparse
+
         monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse_args)
 
         with pytest.raises(SystemExit) as exc_info:
@@ -186,6 +203,7 @@ class TestMainDispatch:
             return Namespace(command="init", func=raise_interrupt)
 
         import argparse
+
         monkeypatch.setattr(argparse.ArgumentParser, "parse_args", fake_parse_args)
 
         with pytest.raises(SystemExit) as exc_info:
@@ -199,6 +217,7 @@ class TestMainDispatch:
 # ===========================================================================
 # __main__.py — module entry point
 # ===========================================================================
+
 
 class TestDunderMain:
     """Test that python -m mxctl works."""
@@ -218,13 +237,26 @@ class TestDunderMain:
         assert len(called) == 1
 
     def test_python_m_mxctl_version(self):
-        """python -m mxctl --version succeeds."""
-        result = subprocess.run(
-            [sys.executable, "-m", "mxctl", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        """python -m mxctl --version succeeds (via installed binary or module)."""
+        import shutil
+
+        mxctl_bin = shutil.which("mxctl")
+        if mxctl_bin:
+            # Prefer the installed binary (works with uv tool installs)
+            result = subprocess.run(
+                [mxctl_bin, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        else:
+            # Fall back to python -m (works in CI with pip install -e)
+            result = subprocess.run(
+                [sys.executable, "-m", "mxctl", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
         assert result.returncode == 0
         assert "mxctl" in result.stdout
 
@@ -232,6 +264,7 @@ class TestDunderMain:
 # ===========================================================================
 # resolve_message_context() — improved init error path
 # ===========================================================================
+
 
 class TestResolveMessageContextInitErrors:
     """Test the two distinct error messages when no account is configured."""
@@ -283,6 +316,7 @@ class TestResolveMessageContextInitErrors:
 # ===========================================================================
 # _warn_automation_once() — applescript.py
 # ===========================================================================
+
 
 class TestWarnAutomationOnce:
     """Test that the automation permission warning is shown at most once."""
@@ -346,16 +380,19 @@ class TestWarnAutomationOnce:
 # cmd_thread edge cases — composite.py
 # ===========================================================================
 
+
 class TestCmdThreadEdgeCases:
     """Edge cases for cmd_thread."""
 
     def test_thread_empty_result_shows_no_thread_message(self, monkeypatch, capsys):
         from mxctl.commands.mail.composite import cmd_thread
 
-        mock_run = Mock(side_effect=[
-            "Original Subject",  # first call: get subject
-            "",                  # second call: no thread messages found
-        ])
+        mock_run = Mock(
+            side_effect=[
+                "Original Subject",  # first call: get subject
+                "",  # second call: no thread messages found
+            ]
+        )
         monkeypatch.setattr("mxctl.commands.mail.composite.run", mock_run)
 
         args = _args(id=123, json=False, limit=100, all_accounts=False)
@@ -367,10 +404,12 @@ class TestCmdThreadEdgeCases:
     def test_thread_empty_result_json(self, monkeypatch, capsys):
         from mxctl.commands.mail.composite import cmd_thread
 
-        mock_run = Mock(side_effect=[
-            "Test Subject",
-            "",
-        ])
+        mock_run = Mock(
+            side_effect=[
+                "Test Subject",
+                "",
+            ]
+        )
         monkeypatch.setattr("mxctl.commands.mail.composite.run", mock_run)
 
         args = _args(id=123, json=True, limit=100, all_accounts=False)
@@ -383,10 +422,12 @@ class TestCmdThreadEdgeCases:
     def test_thread_all_accounts_flag(self, monkeypatch, capsys):
         from mxctl.commands.mail.composite import cmd_thread
 
-        mock_run = Mock(side_effect=[
-            "Meeting Notes",
-            f"50{chr(0x1F)}Meeting Notes{chr(0x1F)}alice@example.com{chr(0x1F)}Monday{chr(0x1F)}INBOX{chr(0x1F)}Work\n",
-        ])
+        mock_run = Mock(
+            side_effect=[
+                "Meeting Notes",
+                f"50{chr(0x1F)}Meeting Notes{chr(0x1F)}alice@example.com{chr(0x1F)}Monday{chr(0x1F)}INBOX{chr(0x1F)}Work\n",
+            ]
+        )
         monkeypatch.setattr("mxctl.commands.mail.composite.run", mock_run)
 
         args = _args(id=50, json=False, limit=100, all_accounts=True)
@@ -399,10 +440,12 @@ class TestCmdThreadEdgeCases:
     def test_thread_single_account_script(self, monkeypatch, capsys):
         from mxctl.commands.mail.composite import cmd_thread
 
-        mock_run = Mock(side_effect=[
-            "Budget Review",
-            f"77{chr(0x1F)}Budget Review{chr(0x1F)}bob@example.com{chr(0x1F)}Tuesday{chr(0x1F)}INBOX{chr(0x1F)}iCloud\n",
-        ])
+        mock_run = Mock(
+            side_effect=[
+                "Budget Review",
+                f"77{chr(0x1F)}Budget Review{chr(0x1F)}bob@example.com{chr(0x1F)}Tuesday{chr(0x1F)}INBOX{chr(0x1F)}iCloud\n",
+            ]
+        )
         monkeypatch.setattr("mxctl.commands.mail.composite.run", mock_run)
 
         args = _args(id=77, json=False, limit=100, all_accounts=False)
@@ -418,6 +461,7 @@ class TestCmdThreadEdgeCases:
 # cmd_reply edge cases — composite.py
 # ===========================================================================
 
+
 class TestCmdReplyEdgeCases:
     """Edge cases for cmd_reply."""
 
@@ -425,10 +469,12 @@ class TestCmdReplyEdgeCases:
         """If subject already starts with Re:, don't double-prefix."""
         from mxctl.commands.mail.composite import cmd_reply
 
-        mock_run = Mock(side_effect=[
-            f"Re: Original{chr(0x1F)}sender@example.com{chr(0x1F)}Monday{chr(0x1F)}Body text",
-            "draft created",
-        ])
+        mock_run = Mock(
+            side_effect=[
+                f"Re: Original{chr(0x1F)}sender@example.com{chr(0x1F)}Monday{chr(0x1F)}Body text",
+                "draft created",
+            ]
+        )
         monkeypatch.setattr("mxctl.commands.mail.composite.run", mock_run)
 
         args = _args(id=100, body="Thanks!", json=False)
@@ -442,9 +488,7 @@ class TestCmdReplyEdgeCases:
         """If sender has no extractable email address, die() is called."""
         from mxctl.commands.mail.composite import cmd_reply
 
-        mock_run = Mock(return_value=(
-            f"Subject{chr(0x1F)}NotAnEmail{chr(0x1F)}Monday{chr(0x1F)}Body"
-        ))
+        mock_run = Mock(return_value=(f"Subject{chr(0x1F)}NotAnEmail{chr(0x1F)}Monday{chr(0x1F)}Body"))
         monkeypatch.setattr("mxctl.commands.mail.composite.run", mock_run)
 
         args = _args(id=42, body="Hello", json=False)
@@ -469,6 +513,7 @@ class TestCmdReplyEdgeCases:
 # cmd_forward edge cases — composite.py
 # ===========================================================================
 
+
 class TestCmdForwardEdgeCases:
     """Edge cases for cmd_forward."""
 
@@ -476,10 +521,12 @@ class TestCmdForwardEdgeCases:
         """Subject already starting with Fwd: is not double-prefixed."""
         from mxctl.commands.mail.composite import cmd_forward
 
-        mock_run = Mock(side_effect=[
-            f"Fwd: Original{chr(0x1F)}sender@example.com{chr(0x1F)}Monday{chr(0x1F)}Body",
-            "draft created",
-        ])
+        mock_run = Mock(
+            side_effect=[
+                f"Fwd: Original{chr(0x1F)}sender@example.com{chr(0x1F)}Monday{chr(0x1F)}Body",
+                "draft created",
+            ]
+        )
         monkeypatch.setattr("mxctl.commands.mail.composite.run", mock_run)
 
         args = _args(id=55, to="fwd@example.com", json=False)
@@ -493,9 +540,7 @@ class TestCmdForwardEdgeCases:
         """If --to has no valid email address, die()."""
         from mxctl.commands.mail.composite import cmd_forward
 
-        mock_run = Mock(return_value=(
-            f"Subject{chr(0x1F)}sender@example.com{chr(0x1F)}Monday{chr(0x1F)}Body"
-        ))
+        mock_run = Mock(return_value=(f"Subject{chr(0x1F)}sender@example.com{chr(0x1F)}Monday{chr(0x1F)}Body"))
         monkeypatch.setattr("mxctl.commands.mail.composite.run", mock_run)
 
         args = _args(id=42, to="not-a-valid-address", json=False)
@@ -519,10 +564,12 @@ class TestCmdForwardEdgeCases:
         """--to can be a formatted 'Name <email>' string."""
         from mxctl.commands.mail.composite import cmd_forward
 
-        mock_run = Mock(side_effect=[
-            f"Subject{chr(0x1F)}sender@example.com{chr(0x1F)}Monday{chr(0x1F)}Body",
-            "draft created",
-        ])
+        mock_run = Mock(
+            side_effect=[
+                f"Subject{chr(0x1F)}sender@example.com{chr(0x1F)}Monday{chr(0x1F)}Body",
+                "draft created",
+            ]
+        )
         monkeypatch.setattr("mxctl.commands.mail.composite.run", mock_run)
 
         args = _args(id=42, to="Alice Smith <alice@example.com>", json=False)
@@ -537,6 +584,7 @@ class TestCmdForwardEdgeCases:
 # ===========================================================================
 # cmd_top_senders edge cases — analytics.py
 # ===========================================================================
+
 
 class TestCmdTopSendersEdgeCases:
     """Edge cases for cmd_top_senders."""
@@ -571,12 +619,7 @@ class TestCmdTopSendersEdgeCases:
         from mxctl.commands.mail.analytics import cmd_top_senders
 
         # alice appears 3x, bob 1x — alice should be first
-        mock_run = Mock(return_value=(
-            "alice@example.com\n"
-            "bob@example.com\n"
-            "alice@example.com\n"
-            "alice@example.com\n"
-        ))
+        mock_run = Mock(return_value=("alice@example.com\nbob@example.com\nalice@example.com\nalice@example.com\n"))
         monkeypatch.setattr("mxctl.commands.mail.analytics.run", mock_run)
 
         args = _args(days=7, limit=5, json=False)
@@ -591,9 +634,7 @@ class TestCmdTopSendersEdgeCases:
         from mxctl.commands.mail.analytics import cmd_top_senders
 
         # 5 unique senders but limit=3
-        senders = "\n".join([
-            "a@x.com", "b@x.com", "c@x.com", "d@x.com", "e@x.com"
-        ])
+        senders = "\n".join(["a@x.com", "b@x.com", "c@x.com", "d@x.com", "e@x.com"])
         mock_run = Mock(return_value=senders)
         monkeypatch.setattr("mxctl.commands.mail.analytics.run", mock_run)
 
@@ -610,6 +651,7 @@ class TestCmdTopSendersEdgeCases:
 # ===========================================================================
 # cmd_digest edge cases — analytics.py
 # ===========================================================================
+
 
 class TestCmdDigestEdgeCases:
     """Edge cases for cmd_digest."""
@@ -630,11 +672,13 @@ class TestCmdDigestEdgeCases:
         from mxctl.commands.mail.analytics import cmd_digest
 
         # Two messages from same domain, one from different
-        mock_run = Mock(return_value=(
-            f"iCloud{chr(0x1F)}1{chr(0x1F)}Newsletter{chr(0x1F)}news@example.com{chr(0x1F)}Monday\n"
-            f"iCloud{chr(0x1F)}2{chr(0x1F)}Promo{chr(0x1F)}promo@example.com{chr(0x1F)}Tuesday\n"
-            f"iCloud{chr(0x1F)}3{chr(0x1F)}Alert{chr(0x1F)}noreply@other.org{chr(0x1F)}Wednesday\n"
-        ))
+        mock_run = Mock(
+            return_value=(
+                f"iCloud{chr(0x1F)}1{chr(0x1F)}Newsletter{chr(0x1F)}news@example.com{chr(0x1F)}Monday\n"
+                f"iCloud{chr(0x1F)}2{chr(0x1F)}Promo{chr(0x1F)}promo@example.com{chr(0x1F)}Tuesday\n"
+                f"iCloud{chr(0x1F)}3{chr(0x1F)}Alert{chr(0x1F)}noreply@other.org{chr(0x1F)}Wednesday\n"
+            )
+        )
         monkeypatch.setattr("mxctl.commands.mail.analytics.run", mock_run)
 
         args = _args(json=False)
@@ -665,6 +709,7 @@ class TestCmdDigestEdgeCases:
 # ===========================================================================
 # cmd_show_flagged edge cases — analytics.py
 # ===========================================================================
+
 
 class TestCmdShowFlaggedEdgeCases:
     """Edge cases for cmd_show_flagged."""
@@ -701,9 +746,7 @@ class TestCmdShowFlaggedEdgeCases:
         # Ensure resolve_account returns None so the all-accounts branch is taken
         monkeypatch.setattr("mxctl.commands.mail.analytics.resolve_account", lambda _: None)
 
-        mock_run = Mock(return_value=(
-            f"99{chr(0x1F)}Flagged{chr(0x1F)}x@y.com{chr(0x1F)}Monday{chr(0x1F)}INBOX{chr(0x1F)}iCloud\n"
-        ))
+        mock_run = Mock(return_value=(f"99{chr(0x1F)}Flagged{chr(0x1F)}x@y.com{chr(0x1F)}Monday{chr(0x1F)}INBOX{chr(0x1F)}iCloud\n"))
         monkeypatch.setattr("mxctl.commands.mail.analytics.run", mock_run)
 
         args = Namespace(json=False, account=None, mailbox="INBOX", limit=25)
@@ -716,9 +759,7 @@ class TestCmdShowFlaggedEdgeCases:
         """When account is set, the script should scope to that account."""
         from mxctl.commands.mail.analytics import cmd_show_flagged
 
-        mock_run = Mock(return_value=(
-            f"88{chr(0x1F)}Task{chr(0x1F)}z@w.com{chr(0x1F)}Tuesday{chr(0x1F)}INBOX{chr(0x1F)}iCloud\n"
-        ))
+        mock_run = Mock(return_value=(f"88{chr(0x1F)}Task{chr(0x1F)}z@w.com{chr(0x1F)}Tuesday{chr(0x1F)}INBOX{chr(0x1F)}iCloud\n"))
         monkeypatch.setattr("mxctl.commands.mail.analytics.run", mock_run)
 
         args = _args(limit=25, json=False)
@@ -732,6 +773,7 @@ class TestCmdShowFlaggedEdgeCases:
 # ===========================================================================
 # cmd_headers edge cases — system.py
 # ===========================================================================
+
 
 class TestCmdHeadersEdgeCases:
     """Edge cases for cmd_headers."""
@@ -839,6 +881,7 @@ class TestCmdHeadersEdgeCases:
 # cmd_rules edge cases — system.py
 # ===========================================================================
 
+
 class TestCmdRulesEdgeCases:
     """Edge cases for cmd_rules (toggle enable/disable)."""
 
@@ -930,6 +973,7 @@ class TestCmdRulesEdgeCases:
 # cmd_attachments edge cases — attachments.py
 # ===========================================================================
 
+
 class TestCmdAttachmentsEdgeCases:
     """Edge cases for cmd_attachments (list)."""
 
@@ -966,12 +1010,7 @@ class TestCmdAttachmentsEdgeCases:
         """Multiple attachments should be listed with numbers."""
         from mxctl.commands.mail.attachments import cmd_attachments
 
-        mock_run = Mock(return_value=(
-            "Contract Email\n"
-            "contract.pdf\n"
-            "addendum.docx\n"
-            "signature.png\n"
-        ))
+        mock_run = Mock(return_value=("Contract Email\ncontract.pdf\naddendum.docx\nsignature.png\n"))
         monkeypatch.setattr("mxctl.commands.mail.attachments.run", mock_run)
 
         args = _args(id=99, json=False)
@@ -986,11 +1025,7 @@ class TestCmdAttachmentsEdgeCases:
         """JSON output includes subject and full attachment list."""
         from mxctl.commands.mail.attachments import cmd_attachments
 
-        mock_run = Mock(return_value=(
-            "Weekly Report\n"
-            "data.csv\n"
-            "summary.pdf\n"
-        ))
+        mock_run = Mock(return_value=("Weekly Report\ndata.csv\nsummary.pdf\n"))
         monkeypatch.setattr("mxctl.commands.mail.attachments.run", mock_run)
 
         args = _args(id=10, json=True)
