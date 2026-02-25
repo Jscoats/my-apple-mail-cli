@@ -142,7 +142,7 @@ Triage -- 15 Unread Messages
 
 ### Setup
 - `init` - First-time setup wizard (auto-detects Mail accounts, configures default account and optional Todoist token)
-- `ai-setup` - Configure your AI assistant (Claude Code, Cursor, Windsurf) to use mxctl
+- `ai-setup` - Configure your AI assistant to use mxctl (Claude Code, Cursor, Windsurf, Ollama, and others)
 
 ### Account & Mailbox Management
 - `inbox` - Overview of all accounts with unread counts

@@ -500,7 +500,10 @@ def register(subparsers) -> None:
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_init)
 
-    p2 = subparsers.add_parser("ai-setup", help="Configure your AI assistant to use mxctl")
+    p2 = subparsers.add_parser(
+        "ai-setup",
+        help="Configure your AI assistant to use mxctl (Claude Code, Cursor, Windsurf, Ollama, and others)",
+    )
     p2.add_argument("--json", action="store_true", help="Output as JSON")
     p2.add_argument(
         "--print",
