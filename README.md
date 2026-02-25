@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="demo/splash.png" alt="mxctl — Apple Mail from your terminal" width="700">
+</p>
+
 <h1 align="center">
   <code>mxctl</code>
 </h1>
