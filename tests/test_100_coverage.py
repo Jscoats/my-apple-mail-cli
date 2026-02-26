@@ -1606,3 +1606,61 @@ class TestTodoistMissingLines:
         cmd_to_todoist(self._todoist_args(project="Work"))
         out = capsys.readouterr().out
         assert "Subject" in out
+
+
+# ---------------------------------------------------------------------------
+# api.py — import coverage
+# ---------------------------------------------------------------------------
+
+
+class TestApiImports:
+    """Verify all api.py exports are importable."""
+
+    def test_api_all_exports(self):
+        """Every name in __all__ is importable and callable."""
+        import mxctl.api as api
+
+        assert hasattr(api, "__all__")
+        assert len(api.__all__) >= 50
+        for name in api.__all__:
+            obj = getattr(api, name)
+            assert callable(obj), f"{name} is not callable"
+
+
+# ---------------------------------------------------------------------------
+# analytics.py — stats --all empty mailboxes branch (lines 293-295)
+# ---------------------------------------------------------------------------
+
+
+class TestStatsAllEmptyMailboxes:
+    def test_stats_all_no_mailboxes(self, monkeypatch, capsys):
+        """stats --all with empty result hits the 'no mailboxes' branch."""
+        from mxctl.commands.mail.analytics import cmd_stats
+
+        monkeypatch.setattr("mxctl.commands.mail.analytics.resolve_account", lambda _: "iCloud")
+        monkeypatch.setattr("mxctl.commands.mail.analytics.run", Mock(return_value=""))
+
+        args = _args(account=None, all=True, mailbox=None)
+        cmd_stats(args)
+
+        out = capsys.readouterr().out
+        assert "No mailboxes found" in out
+
+
+# ---------------------------------------------------------------------------
+# system.py — get_headers() data function (lines 42-54)
+# ---------------------------------------------------------------------------
+
+
+class TestGetHeadersDataFunction:
+    def test_get_headers_returns_parsed_dict(self, monkeypatch):
+        """get_headers() calls AppleScript and returns parsed header dict."""
+        from mxctl.commands.mail.system import get_headers
+
+        raw = "From: sender@example.com\nTo: recipient@example.com\nSubject: Test\n"
+        monkeypatch.setattr("mxctl.commands.mail.system.run", Mock(return_value=raw))
+
+        result = get_headers("iCloud", "INBOX", 123)
+        assert isinstance(result, dict)
+        assert result.get("From") == "sender@example.com"
+        assert result.get("Subject") == "Test"

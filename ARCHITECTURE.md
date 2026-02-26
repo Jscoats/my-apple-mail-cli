@@ -87,4 +87,4 @@ Batch commands (`batch-read`, `batch-move`, `batch-delete`, `batch-flag`) log th
 
 Tests live in `tests/` and use `unittest.mock` to mock AppleScript calls. No actual Mail.app interaction happens during testing. Run with `pytest --cov` for coverage.
 
-The suite has 675 tests (100% coverage) across 19 test files covering command parsing, AppleScript output parsing, error paths, date handling, formatting, config resolution, batch operations, undo logging, templates, AI classification logic, unsubscribe HTTP paths, Todoist integration, inbox tools, and bulk export. Six unreachable defensive guards are marked with `# pragma: no cover`.
+The suite has 678 tests (100% coverage) across 19 test files covering command parsing, AppleScript output parsing, error paths, date handling, formatting, config resolution, batch operations, undo logging, templates, AI classification logic, unsubscribe HTTP paths, Todoist integration, inbox tools, bulk export, and the public API module. Six unreachable defensive guards are marked with `# pragma: no cover`.

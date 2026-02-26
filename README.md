@@ -443,7 +443,7 @@ The AI analyzes which newsletters you actually read vs. ignore, then unsubscribe
 
 Built with modern Python patterns:
 - **Zero runtime dependencies** (stdlib only)
-- **Comprehensive test suite** (675 tests)
+- **Comprehensive test suite** (678 tests)
 - **Modular command structure** (16 focused modules)
 - **AppleScript bridge** for Mail.app communication
 - **Three-tier account resolution** (explicit flag -> config default -> last-used)
