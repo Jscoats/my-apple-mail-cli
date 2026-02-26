@@ -16,7 +16,7 @@
 
 > Apple Mail from your terminal.
 
-**50 commands.** Triage with AI, batch-process newsletters, turn emails into Todoist tasks — all from the terminal. Every command supports `--json` for scripting and AI workflows. Zero external dependencies.
+**50+ commands.** Triage with AI, batch-process newsletters, turn emails into Todoist tasks — all from the terminal. Every command supports `--json` for scripting and AI workflows. Zero external dependencies.
 
 <p align="center">
   <img src="demo/demo.gif" alt="mxctl demo — inbox, triage, summary, and batch operations" width="700">
@@ -39,7 +39,7 @@
 
 ## Key Features
 
-- **50 Commands** - Everything from basic operations to advanced batch processing
+- **50+ Commands** - Everything from basic operations to advanced batch processing
 - **Any Account, One Interface** - iCloud, Gmail, Outlook, Exchange, IMAP -- whatever Mail.app has, this works with
 - **Gmail Mailbox Translation** - Automatically maps standard names (`Trash`, `Spam`, `Sent`) to Gmail's `[Gmail]/...` paths
 - **Built for AI Workflows** - Every command supports `--json` output designed for AI assistants to read and act on
@@ -103,7 +103,7 @@ Inbox Overview
 ------------------------------------------
   iCloud             3 unread   (47 total)
   Work Email         12 unread  (203 total)
-  Johnny.Coats84@gmail.com  0 unread  (18 total)
+  Personal Gmail     0 unread   (18 total)
 ------------------------------------------
   Total              15 unread
 ```
@@ -282,13 +282,6 @@ mxctl move 3 --to Archive     # Move message [3]
 
 Aliases update each time you run a listing command (`list`, `inbox`, `search`, `triage`, `summary`, etc.). Full message IDs still work if you prefer them. JSON output includes both `id` (real) and `alias` (short number).
 
-### JSON Output for Automation
-```bash
-# Every command supports --json
-mxctl inbox --json | jq '.accounts[0].unread_count'
-mxctl search "invoice" --json | jq '.[].subject'
-```
-
 ### Export Messages
 ```bash
 # Export a single message
@@ -300,8 +293,6 @@ mxctl export "Work" --to ~/Documents/mail/ -a "Work Email"
 # Bulk export messages after a date
 mxctl export "INBOX" --to ~/Documents/mail/ -a "iCloud" --after 2026-01-01
 ```
-
-Note: The destination flag is `--to` (not `--dest`).
 
 ### Email Templates
 ```bash
@@ -330,66 +321,27 @@ It walks you through selecting your AI assistant (Claude Code, Cursor, or Windsu
 
 #### Manual setup
 
-If you prefer to set things up yourself, add this block to your assistant's context file (`~/.claude/CLAUDE.md` for Claude Code, `.cursorrules` for Cursor, `.windsurfrules` for Windsurf):
-
-````markdown
-## mxctl — Apple Mail CLI
-
-`mxctl` manages Apple Mail from the terminal. Use it to read, triage, and act on email without opening Mail.app.
-
-Key commands:
-- `mxctl inbox` — unread counts across all accounts
-- `mxctl triage` — categorize unread mail by urgency
-- `mxctl summary` — concise one-liner per unread message
-- `mxctl list [-a ACCOUNT] [--unread] [--limit N]` — list messages
-- `mxctl read ID [-a ACCOUNT] [-m MAILBOX]` — read a message
-- `mxctl search QUERY [--sender]` — search messages
-- `mxctl mark-read ID` / `mxctl flag ID` — message actions
-- `mxctl batch-move --from-sender ADDR --to-mailbox MAILBOX` — bulk move
-- `mxctl batch-delete --older-than DAYS -m MAILBOX` — bulk delete
-- `mxctl undo` — roll back the last batch operation
-- `mxctl to-todoist ID --project NAME` — turn an email into a task
-
-Add `--json` to any command for structured output. Run `mxctl --help` for all 50 commands.
-Default account is set in `~/.config/mxctl/config.json`. Use `-a "Account Name"` to switch accounts.
-````
+Prefer to configure it yourself? Run `mxctl ai-setup --print` to get the raw snippet, then paste it into your assistant's context file (`~/.claude/CLAUDE.md`, `.cursorrules`, `.windsurfrules`, etc.).
 
 #### Local AI (Ollama, LM Studio, Aider, etc.)
 
-For local models, use `--print` to dump the raw snippet and pipe it wherever you need:
+Use `--print` to get the raw snippet for piping:
 
 ```bash
-# Copy to clipboard
-mxctl ai-setup --print | pbcopy
-
-# Append to an Ollama Modelfile
-mxctl ai-setup --print >> ~/Modelfile
-
-# Save as a reusable system prompt file
-mxctl ai-setup --print > ~/.config/mxctl-prompt.md
-
-# Pass to Aider
-mxctl ai-setup --print > .aider.prompt.md
+mxctl ai-setup --print | pbcopy              # clipboard
+mxctl ai-setup --print >> ~/Modelfile         # Ollama
+mxctl ai-setup --print > .aider.prompt.md     # Aider
 ```
 
-`--print` outputs clean markdown with no interactive prompts — it's designed for piping.
-
-#### Ad-hoc: inject the full command list on demand
-
-For a one-off session with any AI tool, paste the full command reference directly into the chat:
-
-```bash
-mxctl --help
-```
-
-The output is concise enough to fit in any context window and gives the AI everything it needs to pick the right command.
+For a one-off session, `mxctl --help` gives any AI the full command reference.
 
 ### With Claude Code
-```bash
-# Just ask Claude to check your mail
-"Run mxctl triage and tell me what's urgent"
-"Summarize my unread mail and create Todoist tasks for anything that needs action"
-```
+
+Just ask in natural language:
+
+> *"Run mxctl triage and tell me what's urgent"*
+>
+> *"Summarize my unread mail and create Todoist tasks for anything that needs action"*
 
 ### With any AI tool
 ```bash
@@ -405,11 +357,10 @@ mxctl triage --json | llm "Draft responses for the urgent items"
 # Unread count for your status bar
 mxctl count
 
-# Export to JSON for any workflow
-mxctl inbox --json | jq '.accounts[].unread_count'
+# Every command supports --json
+mxctl inbox --json | jq '.[].unread'
+mxctl search "invoice" --json | jq '.[].subject'
 ```
-
-The CLI is the bridge between Mail.app and whatever tools you use -- AI, scripts, or both.
 
 ## AI Demos
 
@@ -463,7 +414,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture documentation.
 | **Setup** | `pip install mxctl && mxctl init` | Extensive config | OAuth flows + API keys | Write your own scripts |
 | **Dependencies** | Zero (stdlib only) | Varies | SDK + auth libraries | None |
 
-**In short:** mutt replaces Mail.app (you lose macOS integration). Provider APIs lock you into one service. Raw AppleScript works but you're building everything from scratch. mxctl gives you 50 structured commands on top of the Mail.app you already use.
+**In short:** mutt replaces Mail.app (you lose macOS integration). Provider APIs lock you into one service. Raw AppleScript works but you're building everything from scratch. mxctl gives you 50+ structured commands on top of the Mail.app you already use.
 
 ## Contributing
 
@@ -472,10 +423,6 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-Built to automate email workflows without leaving the terminal.
 
 ## Contact
 
