@@ -23,6 +23,7 @@ from mxctl.util.mail_helpers import extract_display_name, extract_email, parse_m
 # Private helpers — AppleScript builders
 # ---------------------------------------------------------------------------
 
+
 def _build_process_inbox_script(account: str | None, limit: int) -> str:
     """Return an AppleScript that scans INBOX(es) for unread messages.
 
@@ -102,9 +103,7 @@ def _build_newsletters_script(account: str | None, mailbox: str, limit: int) -> 
     Otherwise all enabled accounts are scanned up to *limit* total messages.
     Output rows: sender|read_status
     """
-    msg_row = (
-        f'set output to output & (sender of m) & "{FIELD_SEPARATOR}" & (read status of m) & linefeed'
-    )
+    msg_row = f'set output to output & (sender of m) & "{FIELD_SEPARATOR}" & (read status of m) & linefeed'
     if account:
         acct_escaped = escape(account)
         mb_escaped = escape(mailbox)
@@ -159,6 +158,43 @@ def _build_newsletters_script(account: str | None, mailbox: str, limit: int) -> 
 # process-inbox — categorize unread messages and suggest actions
 # ---------------------------------------------------------------------------
 
+
+def get_inbox_categories(account: str | None, limit: int) -> dict:
+    """Categorize unread inbox messages into flagged, people, and notifications.
+
+    Returns dict with keys: total, flagged, people, notifications (each a list of message dicts).
+    """
+    script = _build_process_inbox_script(account, limit)
+    result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
+
+    flagged = []
+    people = []
+    notifications = []
+
+    if result.strip():
+        for line in result.strip().split("\n"):
+            if not line.strip():
+                continue
+            msg = parse_message_line(line, ["account", "id", "subject", "sender", "date", "flagged"], FIELD_SEPARATOR)
+            if msg is None:
+                continue
+
+            if msg["flagged"]:
+                flagged.append(msg)
+            elif any(p in extract_email(msg["sender"]).lower() for p in NOREPLY_PATTERNS):
+                notifications.append(msg)
+            else:
+                people.append(msg)
+
+    total = len(flagged) + len(people) + len(notifications)
+    return {
+        "total": total,
+        "flagged": flagged,
+        "people": people,
+        "notifications": notifications,
+    }
+
+
 def cmd_process_inbox(args) -> None:
     """Read-only diagnostic: categorize unread messages and output action plan."""
     # Use only the explicitly-passed -a flag, not the config default.
@@ -167,30 +203,15 @@ def cmd_process_inbox(args) -> None:
     account = getattr(args, "account", None)
     limit = validate_limit(getattr(args, "limit", 50))
 
-    script = _build_process_inbox_script(account, limit)
-    result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
-    if not result.strip():
+    json_data = get_inbox_categories(account, limit)
+    flagged = json_data["flagged"]
+    people = json_data["people"]
+    notifications = json_data["notifications"]
+    total = json_data["total"]
+
+    if total == 0:
         format_output(args, "No unread messages found.")
         return
-
-    # Parse and categorize messages
-    flagged = []
-    people = []
-    notifications = []
-
-    for line in result.strip().split("\n"):
-        if not line.strip():
-            continue
-        msg = parse_message_line(line, ["account", "id", "subject", "sender", "date", "flagged"], FIELD_SEPARATOR)
-        if msg is None:
-            continue
-
-        if msg["flagged"]:
-            flagged.append(msg)
-        elif any(p in extract_email(msg["sender"]).lower() for p in NOREPLY_PATTERNS):
-            notifications.append(msg)
-        else:
-            people.append(msg)
 
     # Assign sequential aliases across all categories
     all_messages = flagged + people + notifications
@@ -198,7 +219,6 @@ def cmd_process_inbox(args) -> None:
     for i, m in enumerate(all_messages, 1):
         m["alias"] = i
 
-    total = len(flagged) + len(people) + len(notifications)
     text = f"Inbox Processing Plan ({total} unread):"
 
     # Suggest actions for each category
@@ -210,8 +230,8 @@ def cmd_process_inbox(args) -> None:
         if len(flagged) > 5:
             text += f"\n  ... and {len(flagged) - 5} more"
         text += "\n\nSuggested commands:"
-        text += f"\n  mxctl read <ID> -a \"{flagged[0]['account']}\""
-        text += f"\n  mxctl to-todoist <ID> -a \"{flagged[0]['account']}\" --priority 4"
+        text += f'\n  mxctl read <ID> -a "{flagged[0]["account"]}"'
+        text += f'\n  mxctl to-todoist <ID> -a "{flagged[0]["account"]}" --priority 4'
 
     if people:
         text += f"\n\nPEOPLE ({len(people)}) — Requires attention:"
@@ -221,8 +241,8 @@ def cmd_process_inbox(args) -> None:
         if len(people) > 5:
             text += f"\n  ... and {len(people) - 5} more"
         text += "\n\nSuggested commands:"
-        text += f"\n  mxctl read <ID> -a \"{people[0]['account']}\""
-        text += f"\n  mxctl mark-read <ID> -a \"{people[0]['account']}\""
+        text += f'\n  mxctl read <ID> -a "{people[0]["account"]}"'
+        text += f'\n  mxctl mark-read <ID> -a "{people[0]["account"]}"'
 
     if notifications:
         text += f"\n\nNOTIFICATIONS ({len(notifications)}) — Bulk actions:"
@@ -232,15 +252,9 @@ def cmd_process_inbox(args) -> None:
         if len(notifications) > 5:
             text += f"\n  ... and {len(notifications) - 5} more"
         text += "\n\nSuggested commands:"
-        text += f"\n  mxctl batch-read -a \"{notifications[0]['account']}\""
-        text += f"\n  mxctl unsubscribe <ID> -a \"{notifications[0]['account']}\""
+        text += f'\n  mxctl batch-read -a "{notifications[0]["account"]}"'
+        text += f'\n  mxctl unsubscribe <ID> -a "{notifications[0]["account"]}"'
 
-    json_data = {
-        "total": total,
-        "flagged": flagged,
-        "people": people,
-        "notifications": notifications,
-    }
     format_output(args, text, json_data=json_data)
 
 
@@ -248,21 +262,22 @@ def cmd_process_inbox(args) -> None:
 # clean-newsletters — identify bulk senders + suggest cleanup
 # ---------------------------------------------------------------------------
 
-def cmd_clean_newsletters(args) -> None:
-    """Identify likely newsletter senders and suggest batch-move commands."""
-    account = resolve_account(getattr(args, "account", None))
-    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    limit = max(1, min(getattr(args, "limit", 200), MAX_MESSAGES_BATCH))
 
+def get_newsletter_senders(account: str | None, mailbox: str, limit: int) -> dict:
+    """Identify likely newsletter senders from a mailbox.
+
+    Returns dict with keys:
+      - newsletters (list[dict]): identified newsletter senders
+      - has_messages (bool): False if the mailbox had no messages at all
+    """
     script = _build_newsletters_script(account, mailbox, limit)
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
+
     if not result.strip():
-        scope = f"in {mailbox} [{account}]" if account else "in INBOX across all accounts"
-        format_output(args, f"No messages found {scope}.", json_data={"newsletters": []})
-        return
+        return {"newsletters": [], "has_messages": False}
 
     # Group by sender email
-    sender_stats = defaultdict(lambda: {"total": 0, "unread": 0})
+    sender_stats: dict = defaultdict(lambda: {"total": 0, "unread": 0})
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
@@ -278,19 +293,34 @@ def cmd_clean_newsletters(args) -> None:
     # Identify likely newsletters
     newsletters = []
     for email, stats in sender_stats.items():
-        is_likely_newsletter = (
-            stats["total"] >= 3 or
-            any(pattern in email.lower() for pattern in NOREPLY_PATTERNS)
-        )
+        is_likely_newsletter = stats["total"] >= 3 or any(pattern in email.lower() for pattern in NOREPLY_PATTERNS)
         if is_likely_newsletter:
-            newsletters.append({
-                "sender": email,
-                "total_messages": stats["total"],
-                "unread_messages": stats["unread"],
-            })
+            newsletters.append(
+                {
+                    "sender": email,
+                    "total_messages": stats["total"],
+                    "unread_messages": stats["unread"],
+                }
+            )
 
     # Sort by message count descending
     newsletters.sort(key=lambda x: x["total_messages"], reverse=True)
+    return {"newsletters": newsletters, "has_messages": True}
+
+
+def cmd_clean_newsletters(args) -> None:
+    """Identify likely newsletter senders and suggest batch-move commands."""
+    account = resolve_account(getattr(args, "account", None))
+    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
+    limit = max(1, min(getattr(args, "limit", 200), MAX_MESSAGES_BATCH))
+
+    data = get_newsletter_senders(account, mailbox, limit)
+    newsletters = data["newsletters"]
+
+    if not data.get("has_messages", True):
+        scope = f"in {mailbox} [{account}]" if account else "in INBOX across all accounts"
+        format_output(args, f"No messages found {scope}.", json_data={"newsletters": []})
+        return
 
     if not newsletters:
         format_output(args, "No newsletter senders identified.", json_data={"newsletters": []})
@@ -305,22 +335,23 @@ def cmd_clean_newsletters(args) -> None:
         text += f"\n    Total: {nl['total_messages']} messages ({nl['unread_messages']} unread)"
 
         # Suggest cleanup command
-        acct_flag = f"-a \"{account}\"" if account else ""
-        cleanup_cmd = f"mxctl batch-move --from-sender \"{nl['sender']}\" --to-mailbox \"Newsletters\" {acct_flag}"
+        acct_flag = f'-a "{account}"' if account else ""
+        cleanup_cmd = f'mxctl batch-move --from-sender "{nl["sender"]}" --to-mailbox "Newsletters" {acct_flag}'
         text += f"\n    Cleanup: {cleanup_cmd}"
 
-    format_output(args, text, json_data={"newsletters": newsletters})
+    format_output(args, text, json_data=data)
 
 
 # ---------------------------------------------------------------------------
 # weekly-review — flagged + unreplied + attachment report
 # ---------------------------------------------------------------------------
 
-def cmd_weekly_review(args) -> None:
-    """Generate weekly review: flagged, messages with attachments, unreplied from people."""
-    account = resolve_account(getattr(args, "account", None))
-    days = getattr(args, "days", 7)
 
+def get_weekly_review(account: str | None, days: int) -> dict:
+    """Generate weekly review data: flagged, attachment, and unreplied messages.
+
+    Returns dict with day/account context plus three message lists.
+    """
     # Calculate date threshold
     since_dt = datetime.now() - timedelta(days=days)
     since_as = to_applescript_date(since_dt)
@@ -330,38 +361,38 @@ def cmd_weekly_review(args) -> None:
 
     # Category 1: Flagged messages (all mailboxes, not date-filtered)
     flagged_inner = (
-        f'set flaggedMsgs to (every message of mb whose flagged status is true)\n'
-        f'                repeat with m in flaggedMsgs\n'
+        f"set flaggedMsgs to (every message of mb whose flagged status is true)\n"
+        f"                repeat with m in flaggedMsgs\n"
         f'                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed\n'
-        f'                end repeat'
+        f"                end repeat"
     )
     flagged_script = mailbox_iterator(flagged_inner, account=acct_escaped)
 
     # Category 2: Messages with attachments from last N days
     attachments_inner = (
         f'set msgs to (every message of mb whose date received >= date "{since_as}")\n'
-        f'                set msgCount to count of msgs\n'
-        f'                set cap to {MAX_MESSAGES_BATCH}\n'
-        f'                if msgCount < cap then set cap to msgCount\n'
-        f'                repeat with i from 1 to cap\n'
-        f'                    set m to item i of msgs\n'
-        f'                    if (count of mail attachments of m) > 0 then\n'
+        f"                set msgCount to count of msgs\n"
+        f"                set cap to {MAX_MESSAGES_BATCH}\n"
+        f"                if msgCount < cap then set cap to msgCount\n"
+        f"                repeat with i from 1 to cap\n"
+        f"                    set m to item i of msgs\n"
+        f"                    if (count of mail attachments of m) > 0 then\n"
         f'                        set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (count of mail attachments of m) & linefeed\n'
-        f'                    end if\n'
-        f'                end repeat'
+        f"                    end if\n"
+        f"                end repeat"
     )
     attachments_script = mailbox_iterator(attachments_inner, account=acct_escaped)
 
     # Category 3: Unreplied messages from people (last N days, not yet replied to)
     unreplied_inner = (
         f'set msgs to (every message of mb whose date received >= date "{since_as}" and was replied to is false)\n'
-        f'                set msgCount to count of msgs\n'
-        f'                set cap to {MAX_MESSAGES_BATCH}\n'
-        f'                if msgCount < cap then set cap to msgCount\n'
-        f'                repeat with i from 1 to cap\n'
-        f'                    set m to item i of msgs\n'
+        f"                set msgCount to count of msgs\n"
+        f"                set cap to {MAX_MESSAGES_BATCH}\n"
+        f"                if msgCount < cap then set cap to msgCount\n"
+        f"                repeat with i from 1 to cap\n"
+        f"                    set m to item i of msgs\n"
         f'                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed\n'
-        f'                end repeat'
+        f"                end repeat"
     )
     unreplied_script = mailbox_iterator(unreplied_inner, account=acct_escaped)
 
@@ -401,9 +432,30 @@ def cmd_weekly_review(args) -> None:
             if msg is None:
                 continue
             sender_email = extract_email(msg["sender"])
-            # Skip if sender matches noreply patterns
             if not any(pattern in sender_email.lower() for pattern in NOREPLY_PATTERNS):
                 unreplied_messages.append(msg)
+
+    return {
+        "days": days,
+        "account": account,
+        "flagged_count": len(flagged_messages),
+        "attachment_count": len(attachment_messages),
+        "unreplied_count": len(unreplied_messages),
+        "flagged_messages": flagged_messages,
+        "attachment_messages": attachment_messages,
+        "unreplied_messages": unreplied_messages,
+    }
+
+
+def cmd_weekly_review(args) -> None:
+    """Generate weekly review: flagged, messages with attachments, unreplied from people."""
+    account = resolve_account(getattr(args, "account", None))
+    days = getattr(args, "days", 7)
+
+    json_data = get_weekly_review(account, days)
+    flagged_messages = json_data["flagged_messages"]
+    attachment_messages = json_data["attachment_messages"]
+    unreplied_messages = json_data["unreplied_messages"]
 
     # Assign sequential aliases across all sections
     all_messages = flagged_messages + attachment_messages + unreplied_messages
@@ -459,24 +511,13 @@ def cmd_weekly_review(args) -> None:
     if not flagged_messages and not unreplied_messages and not attachment_messages:
         text += "\n  • Great job! Your inbox is clean."
 
-    # Build JSON response
-    json_data = {
-        "days": days,
-        "account": account,
-        "flagged_count": len(flagged_messages),
-        "attachment_count": len(attachment_messages),
-        "unreplied_count": len(unreplied_messages),
-        "flagged_messages": flagged_messages,
-        "attachment_messages": attachment_messages,
-        "unreplied_messages": unreplied_messages,
-    }
-
     format_output(args, text, json_data=json_data)
 
 
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+
 
 def register(subparsers) -> None:
     # process-inbox

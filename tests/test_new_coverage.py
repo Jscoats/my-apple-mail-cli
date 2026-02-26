@@ -22,6 +22,7 @@ from mxctl.config import FIELD_SEPARATOR
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_args(**kwargs):
     defaults = {
         "json": False,
@@ -36,41 +37,49 @@ def _make_args(**kwargs):
 # actions.py — unsubscribe
 # ===========================================================================
 
+
 class TestUnsubscribePrivateIpValidation:
     """Test _is_private_url() rejects private/loopback addresses."""
 
     def test_private_ip_10_x(self):
         from mxctl.commands.mail.actions import _is_private_url
+
         with patch("socket.gethostbyname", return_value="10.0.0.1"):
             assert _is_private_url("http://internal.corp/unsub") is True
 
     def test_private_ip_172_16(self):
         from mxctl.commands.mail.actions import _is_private_url
+
         with patch("socket.gethostbyname", return_value="172.20.0.1"):
             assert _is_private_url("http://internal.corp/unsub") is True
 
     def test_private_ip_192_168(self):
         from mxctl.commands.mail.actions import _is_private_url
+
         with patch("socket.gethostbyname", return_value="192.168.1.1"):
             assert _is_private_url("http://router.local/unsub") is True
 
     def test_loopback_127(self):
         from mxctl.commands.mail.actions import _is_private_url
+
         with patch("socket.gethostbyname", return_value="127.0.0.1"):
             assert _is_private_url("http://localhost/unsub") is True
 
     def test_public_ip_allowed(self):
         from mxctl.commands.mail.actions import _is_private_url
+
         with patch("socket.gethostbyname", return_value="93.184.216.34"):
             assert _is_private_url("https://example.com/unsub") is False
 
     def test_dns_failure_blocks(self):
         from mxctl.commands.mail.actions import _is_private_url
+
         with patch("socket.gethostbyname", side_effect=socket.gaierror("NXDOMAIN")):
             assert _is_private_url("https://nonexistent.invalid/unsub") is True
 
     def test_missing_hostname_blocks(self):
         from mxctl.commands.mail.actions import _is_private_url
+
         # URL with no hostname
         assert _is_private_url("file:///etc/hosts") is True
 
@@ -83,11 +92,7 @@ class TestUnsubscribeDryRun:
         from mxctl.commands.mail.actions import cmd_unsubscribe
 
         header_value = "<https://example.com/unsub>"
-        mock_run.return_value = (
-            f"Weekly Newsletter"
-            f"{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}"
-            f"List-Unsubscribe: {header_value}\n"
-        )
+        mock_run.return_value = f"Weekly Newsletter{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}List-Unsubscribe: {header_value}\n"
 
         args = _make_args(id=42, dry_run=True, open=False)
         cmd_unsubscribe(args)
@@ -101,11 +106,7 @@ class TestUnsubscribeDryRun:
         from mxctl.commands.mail.actions import cmd_unsubscribe
 
         header_value = "<https://example.com/unsub>, <mailto:unsub@example.com>"
-        mock_run.return_value = (
-            f"My Newsletter"
-            f"{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}"
-            f"List-Unsubscribe: {header_value}\n"
-        )
+        mock_run.return_value = f"My Newsletter{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}List-Unsubscribe: {header_value}\n"
 
         args = _make_args(id=42, dry_run=True, open=False, json=True)
         cmd_unsubscribe(args)
@@ -121,11 +122,7 @@ class TestUnsubscribeDryRun:
     def test_no_unsubscribe_header(self, mock_run, capsys):
         from mxctl.commands.mail.actions import cmd_unsubscribe
 
-        mock_run.return_value = (
-            f"Regular Email"
-            f"{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}"
-            f"From: sender@example.com\n"
-        )
+        mock_run.return_value = f"Regular Email{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}From: sender@example.com\n"
 
         args = _make_args(id=42, dry_run=True, open=False)
         cmd_unsubscribe(args)
@@ -221,9 +218,7 @@ class TestUnsubscribeBrowserFallback:
         from mxctl.commands.mail.actions import cmd_unsubscribe
 
         mock_run.return_value = (
-            f"Digest"
-            f"{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}"
-            f"List-Unsubscribe: <https://example.com/unsub>\n"
+            f"Digest{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}List-Unsubscribe: <https://example.com/unsub>\n"
             # No List-Unsubscribe-Post header => no one-click
         )
 
@@ -242,9 +237,7 @@ class TestUnsubscribeBrowserFallback:
         from mxctl.commands.mail.actions import cmd_unsubscribe
 
         mock_run.return_value = (
-            f"Old Newsletter"
-            f"{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}"
-            f"List-Unsubscribe: <mailto:leave@example.com>\n"
+            f"Old Newsletter{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}List-Unsubscribe: <mailto:leave@example.com>\n"
         )
 
         args = _make_args(id=42, dry_run=False, open=False)
@@ -259,26 +252,28 @@ class TestExtractUrls:
 
     def test_extracts_https(self):
         from mxctl.commands.mail.actions import _extract_urls
+
         https, mailto = _extract_urls("<https://example.com/unsub>")
         assert https == ["https://example.com/unsub"]
         assert mailto == []
 
     def test_extracts_mailto(self):
         from mxctl.commands.mail.actions import _extract_urls
+
         https, mailto = _extract_urls("<mailto:unsub@example.com>")
         assert https == []
         assert mailto == ["mailto:unsub@example.com"]
 
     def test_extracts_both(self):
         from mxctl.commands.mail.actions import _extract_urls
-        https, mailto = _extract_urls(
-            "<https://example.com/unsub>, <mailto:unsub@example.com>"
-        )
+
+        https, mailto = _extract_urls("<https://example.com/unsub>, <mailto:unsub@example.com>")
         assert https == ["https://example.com/unsub"]
         assert mailto == ["mailto:unsub@example.com"]
 
     def test_empty_header(self):
         from mxctl.commands.mail.actions import _extract_urls
+
         https, mailto = _extract_urls("")
         assert https == []
         assert mailto == []
@@ -287,6 +282,7 @@ class TestExtractUrls:
 # ===========================================================================
 # todoist_integration.py — HTTP calls
 # ===========================================================================
+
 
 class TestTodoistIntegration:
     """Test cmd_to_todoist with mocked HTTP and AppleScript."""
@@ -312,11 +308,7 @@ class TestTodoistIntegration:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         mock_config.return_value = {"todoist_api_token": "fake-token"}
-        mock_run.return_value = (
-            f"Important Meeting{FIELD_SEPARATOR}"
-            f"boss@corp.com{FIELD_SEPARATOR}"
-            f"Monday Jan 1 2026"
-        )
+        mock_run.return_value = f"Important Meeting{FIELD_SEPARATOR}boss@corp.com{FIELD_SEPARATOR}Monday Jan 1 2026"
 
         response_payload = {
             "id": "task_abc123",
@@ -346,9 +338,7 @@ class TestTodoistIntegration:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         mock_config.return_value = {"todoist_api_token": "fake-token"}
-        mock_run.return_value = (
-            f"Follow up{FIELD_SEPARATOR}alice@example.com{FIELD_SEPARATOR}Tuesday"
-        )
+        mock_run.return_value = f"Follow up{FIELD_SEPARATOR}alice@example.com{FIELD_SEPARATOR}Tuesday"
 
         projects_list = [
             {"id": "proj_work", "name": "Work"},
@@ -385,9 +375,7 @@ class TestTodoistIntegration:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         mock_config.return_value = {"todoist_api_token": "fake-token"}
-        mock_run.return_value = (
-            f"Test Email{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}Wednesday"
-        )
+        mock_run.return_value = f"Test Email{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}Wednesday"
 
         resp = MagicMock()
         resp.read.return_value = json.dumps([]).encode("utf-8")
@@ -422,9 +410,7 @@ class TestTodoistIntegration:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         mock_config.return_value = {"todoist_api_token": "fake-token"}
-        mock_run.return_value = (
-            f"Email{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}Thursday"
-        )
+        mock_run.return_value = f"Email{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}Thursday"
 
         err_response = MagicMock()
         err_response.read.return_value = b"Unauthorized"
@@ -449,9 +435,7 @@ class TestTodoistIntegration:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         mock_config.return_value = {"todoist_api_token": "fake-token"}
-        mock_run.return_value = (
-            f"Invoice Due{FIELD_SEPARATOR}billing@shop.com{FIELD_SEPARATOR}Friday"
-        )
+        mock_run.return_value = f"Invoice Due{FIELD_SEPARATOR}billing@shop.com{FIELD_SEPARATOR}Friday"
 
         response_payload = {"id": "task_111", "content": "Invoice Due"}
         mock_resp = MagicMock()
@@ -472,6 +456,7 @@ class TestTodoistIntegration:
 # ===========================================================================
 # inbox_tools.py — smoke tests
 # ===========================================================================
+
 
 class TestProcessInbox:
     """Smoke tests for cmd_process_inbox."""
@@ -616,9 +601,7 @@ class TestCleanNewsletters:
         from mxctl.commands.mail.inbox_tools import cmd_clean_newsletters
 
         # Same sender 4 times (>= 3 is threshold)
-        rows = "\n".join(
-            f"digest@weekly.com{FIELD_SEPARATOR}true" for _ in range(4)
-        )
+        rows = "\n".join(f"digest@weekly.com{FIELD_SEPARATOR}true" for _ in range(4))
         mock_run.return_value = rows + "\n"
 
         args = mock_args()
@@ -645,9 +628,7 @@ class TestCleanNewsletters:
     def test_json_output(self, mock_run, capsys, mock_args):
         from mxctl.commands.mail.inbox_tools import cmd_clean_newsletters
 
-        rows = "\n".join(
-            f"updates@service.com{FIELD_SEPARATOR}false" for _ in range(3)
-        )
+        rows = "\n".join(f"updates@service.com{FIELD_SEPARATOR}false" for _ in range(3))
         mock_run.return_value = rows + "\n"
 
         args = mock_args(json=True)
@@ -678,15 +659,12 @@ class TestWeeklyReview:
     def test_shows_flagged(self, mock_run, capsys, mock_args):
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
-        flagged_row = (
-            f"111{FIELD_SEPARATOR}Action Required{FIELD_SEPARATOR}"
-            f"boss@work.com{FIELD_SEPARATOR}Mon Jan 01 2026"
-        )
+        flagged_row = f"111{FIELD_SEPARATOR}Action Required{FIELD_SEPARATOR}boss@work.com{FIELD_SEPARATOR}Mon Jan 01 2026"
         # Three separate run() calls: flagged, attachments, unreplied
         mock_run.side_effect = [
             flagged_row + "\n",  # flagged
-            "",                   # attachments
-            "",                   # unreplied
+            "",  # attachments
+            "",  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -699,14 +677,11 @@ class TestWeeklyReview:
     def test_shows_attachments(self, mock_run, capsys, mock_args):
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
-        attach_row = (
-            f"222{FIELD_SEPARATOR}Budget Q1{FIELD_SEPARATOR}"
-            f"finance@corp.com{FIELD_SEPARATOR}Tue Jan 02 2026{FIELD_SEPARATOR}3"
-        )
+        attach_row = f"222{FIELD_SEPARATOR}Budget Q1{FIELD_SEPARATOR}finance@corp.com{FIELD_SEPARATOR}Tue Jan 02 2026{FIELD_SEPARATOR}3"
         mock_run.side_effect = [
-            "",                  # flagged
-            attach_row + "\n",   # attachments
-            "",                  # unreplied
+            "",  # flagged
+            attach_row + "\n",  # attachments
+            "",  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -720,14 +695,11 @@ class TestWeeklyReview:
     def test_unreplied_skips_noreply(self, mock_run, capsys, mock_args):
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
-        noreply_row = (
-            f"333{FIELD_SEPARATOR}Notification{FIELD_SEPARATOR}"
-            f"noreply@service.com{FIELD_SEPARATOR}Wed Jan 03 2026"
-        )
+        noreply_row = f"333{FIELD_SEPARATOR}Notification{FIELD_SEPARATOR}noreply@service.com{FIELD_SEPARATOR}Wed Jan 03 2026"
         mock_run.side_effect = [
-            "",                    # flagged
-            "",                    # attachments
-            noreply_row + "\n",    # unreplied
+            "",  # flagged
+            "",  # attachments
+            noreply_row + "\n",  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -756,6 +728,7 @@ class TestWeeklyReview:
 # ===========================================================================
 # composite.py — _export_bulk with RECORD_SEPARATOR parsing
 # ===========================================================================
+
 
 class TestExportBulk:
     """Test bulk export RECORD_SEPARATOR parsing in _export_bulk."""
@@ -807,8 +780,12 @@ class TestExportBulk:
             )
 
         result = (
-            make_record(1, "First Message", "Body one") + RECORD_SEPARATOR + "\n"
-            + make_record(2, "Second Message", "Body two") + RECORD_SEPARATOR + "\n"
+            make_record(1, "First Message", "Body one")
+            + RECORD_SEPARATOR
+            + "\n"
+            + make_record(2, "Second Message", "Body two")
+            + RECORD_SEPARATOR
+            + "\n"
         )
 
         self._run_export_bulk(monkeypatch, result, str(tmp_path))
@@ -827,13 +804,7 @@ class TestExportBulk:
     def test_skips_malformed_entries(self, monkeypatch, tmp_path, capsys):
         from mxctl.config import RECORD_SEPARATOR
 
-        good = (
-            f"10{FIELD_SEPARATOR}"
-            f"Good Subject{FIELD_SEPARATOR}"
-            f"x@y.com{FIELD_SEPARATOR}"
-            f"Monday{FIELD_SEPARATOR}"
-            f"Content here"
-        )
+        good = f"10{FIELD_SEPARATOR}Good Subject{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}Content here"
         bad = "only-one-field"
         result = good + RECORD_SEPARATOR + "\n" + bad + RECORD_SEPARATOR + "\n"
 
@@ -848,11 +819,7 @@ class TestExportBulk:
 
         body_with_sep = f"Line 1{FIELD_SEPARATOR}Line 2 (continuation)"
         record = (
-            f"77{FIELD_SEPARATOR}"
-            f"Complex Body{FIELD_SEPARATOR}"
-            f"sender@example.com{FIELD_SEPARATOR}"
-            f"Tuesday{FIELD_SEPARATOR}"
-            + body_with_sep
+            f"77{FIELD_SEPARATOR}Complex Body{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}Tuesday{FIELD_SEPARATOR}" + body_with_sep
         )
         result = record + RECORD_SEPARATOR
 
@@ -871,13 +838,7 @@ class TestExportBulk:
         new_dir = str(tmp_path / "new_subdir")
         assert not os.path.exists(new_dir)
 
-        msg_data = (
-            f"5{FIELD_SEPARATOR}"
-            f"Test{FIELD_SEPARATOR}"
-            f"x@y.com{FIELD_SEPARATOR}"
-            f"Wednesday{FIELD_SEPARATOR}"
-            f"body"
-        )
+        msg_data = f"5{FIELD_SEPARATOR}Test{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}Wednesday{FIELD_SEPARATOR}body"
         result = msg_data + RECORD_SEPARATOR
 
         self._run_export_bulk(monkeypatch, result, new_dir)
@@ -890,13 +851,7 @@ class TestExportBulk:
         from mxctl.commands.mail.composite import _export_bulk
         from mxctl.config import RECORD_SEPARATOR
 
-        msg_data = (
-            f"9{FIELD_SEPARATOR}"
-            f"JSON Test{FIELD_SEPARATOR}"
-            f"x@y.com{FIELD_SEPARATOR}"
-            f"Thursday{FIELD_SEPARATOR}"
-            f"body"
-        )
+        msg_data = f"9{FIELD_SEPARATOR}JSON Test{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}Thursday{FIELD_SEPARATOR}body"
         result = msg_data + RECORD_SEPARATOR
 
         mock_run = Mock(return_value=result)
@@ -914,6 +869,7 @@ class TestExportBulk:
 # ===========================================================================
 # parse_message_line — new helper in mail_helpers.py
 # ===========================================================================
+
 
 class TestParseMessageLine:
     """Test the parse_message_line() helper added in the refactor."""
@@ -988,6 +944,7 @@ class TestParseMessageLine:
 # Bug fix: to-todoist timeout and token validation
 # ===========================================================================
 
+
 class TestTodoistTimeoutAndTokenValidation:
     """Tests for to-todoist hang fix and token validation."""
 
@@ -1027,9 +984,7 @@ class TestTodoistTimeoutAndTokenValidation:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         mock_config.return_value = {"todoist_api_token": "fake-token"}
-        mock_run.return_value = (
-            f"Subject{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}Tuesday"
-        )
+        mock_run.return_value = f"Subject{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}Tuesday"
         mock_urlopen.side_effect = TimeoutError("timed out")
 
         args = self._make_args()
@@ -1048,9 +1003,7 @@ class TestTodoistTimeoutAndTokenValidation:
         from mxctl.config import APPLESCRIPT_TIMEOUT_SHORT
 
         mock_config.return_value = {"todoist_api_token": "fake-token"}
-        mock_run.return_value = (
-            f"Subject{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}Tuesday"
-        )
+        mock_run.return_value = f"Subject{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}Tuesday"
 
         response_payload = {"id": "t1", "content": "Subject"}
         mock_resp = MagicMock()
@@ -1071,6 +1024,7 @@ class TestTodoistTimeoutAndTokenValidation:
 # Bug fix: not-junk uses subject+sender search, not stale ID
 # ===========================================================================
 
+
 class TestNotJunkSubjectSenderSearch:
     """Tests for not-junk search-by-subject+sender fix."""
 
@@ -1086,10 +1040,7 @@ class TestNotJunkSubjectSenderSearch:
         mock_result.stdout = "Test Subject\n"
 
         with patch.object(_subprocess, "run", return_value=mock_result) as mock_sp:
-            result = _try_not_junk_in_mailbox(
-                "iCloud", "Junk", "INBOX", 99,
-                subject="Test Subject", sender="sender@example.com"
-            )
+            result = _try_not_junk_in_mailbox("iCloud", "Junk", "INBOX", 99, subject="Test Subject", sender="sender@example.com")
 
         assert result == "Test Subject"
         # The AppleScript passed to osascript should search by subject+sender, not by ID
@@ -1110,10 +1061,7 @@ class TestNotJunkSubjectSenderSearch:
         mock_result.stdout = "Some Subject\n"
 
         with patch.object(_subprocess, "run", return_value=mock_result) as mock_sp:
-            result = _try_not_junk_in_mailbox(
-                "iCloud", "Junk", "INBOX", 42,
-                subject="", sender=""
-            )
+            result = _try_not_junk_in_mailbox("iCloud", "Junk", "INBOX", 42, subject="", sender="")
 
         assert result == "Some Subject"
         script = mock_sp.call_args[0][0][2]
@@ -1131,10 +1079,7 @@ class TestNotJunkSubjectSenderSearch:
         mock_result.stderr = "Mail got an error: unexpected internal error"
 
         with patch.object(_subprocess, "run", return_value=mock_result):
-            result = _try_not_junk_in_mailbox(
-                "iCloud", "Junk", "INBOX", 42,
-                subject="Subject", sender="sender@example.com"
-            )
+            result = _try_not_junk_in_mailbox("iCloud", "Junk", "INBOX", 42, subject="Subject", sender="sender@example.com")
 
         assert result is None  # error swallowed, not raised
 
@@ -1164,14 +1109,16 @@ class TestNotJunkSubjectSenderSearch:
 
         # Verify helper was called with subject and sender keyword args
         call_kwargs = helper_mock.call_args
-        assert call_kwargs.kwargs.get("subject") == "My Subject" or \
-               (len(call_kwargs[1]) > 0 and call_kwargs[1].get("subject") == "My Subject")
+        assert call_kwargs.kwargs.get("subject") == "My Subject" or (
+            len(call_kwargs[1]) > 0 and call_kwargs[1].get("subject") == "My Subject"
+        )
         assert "alice@example.com" in str(call_kwargs)
 
 
 # ===========================================================================
 # inbox_tools.py — additional coverage for missing lines
 # ===========================================================================
+
 
 class TestProcessInboxWithAccount:
     """Tests for process-inbox -a flag (line 67) and category edge cases."""
@@ -1181,11 +1128,7 @@ class TestProcessInboxWithAccount:
         """process-inbox with -a uses single-account script (line 67)."""
         from mxctl.commands.mail.inbox_tools import cmd_process_inbox
 
-        row = (
-            f"iCloud{FIELD_SEPARATOR}101{FIELD_SEPARATOR}"
-            f"Test{FIELD_SEPARATOR}friend@gmail.com{FIELD_SEPARATOR}"
-            f"Mon{FIELD_SEPARATOR}false"
-        )
+        row = f"iCloud{FIELD_SEPARATOR}101{FIELD_SEPARATOR}Test{FIELD_SEPARATOR}friend@gmail.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}false"
         mock_run.return_value = row + "\n"
 
         # pass account=None to bypass resolve_account (the function reads raw args.account)
@@ -1224,7 +1167,7 @@ class TestProcessInboxWithAccount:
         rows = ""
         for i in range(7):
             rows += (
-                f"iCloud{FIELD_SEPARATOR}{100+i}{FIELD_SEPARATOR}"
+                f"iCloud{FIELD_SEPARATOR}{100 + i}{FIELD_SEPARATOR}"
                 f"Person {i}{FIELD_SEPARATOR}p{i}@gmail.com{FIELD_SEPARATOR}"
                 f"Mon{FIELD_SEPARATOR}false\n"
             )
@@ -1245,7 +1188,7 @@ class TestProcessInboxWithAccount:
         rows = ""
         for i in range(6):
             rows += (
-                f"iCloud{FIELD_SEPARATOR}{200+i}{FIELD_SEPARATOR}"
+                f"iCloud{FIELD_SEPARATOR}{200 + i}{FIELD_SEPARATOR}"
                 f"Notification {i}{FIELD_SEPARATOR}noreply@service{i}.com{FIELD_SEPARATOR}"
                 f"Mon{FIELD_SEPARATOR}false\n"
             )
@@ -1264,15 +1207,9 @@ class TestProcessInboxWithAccount:
         from mxctl.commands.mail.inbox_tools import cmd_process_inbox
 
         good1 = (
-            f"iCloud{FIELD_SEPARATOR}10{FIELD_SEPARATOR}"
-            f"Hello{FIELD_SEPARATOR}alice@example.com{FIELD_SEPARATOR}"
-            f"Mon{FIELD_SEPARATOR}false"
+            f"iCloud{FIELD_SEPARATOR}10{FIELD_SEPARATOR}Hello{FIELD_SEPARATOR}alice@example.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}false"
         )
-        good2 = (
-            f"iCloud{FIELD_SEPARATOR}11{FIELD_SEPARATOR}"
-            f"World{FIELD_SEPARATOR}bob@example.com{FIELD_SEPARATOR}"
-            f"Tue{FIELD_SEPARATOR}false"
-        )
+        good2 = f"iCloud{FIELD_SEPARATOR}11{FIELD_SEPARATOR}World{FIELD_SEPARATOR}bob@example.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}false"
         # Blank lines BETWEEN two valid lines
         mock_run.return_value = good1 + "\n\n  \n" + good2 + "\n"
 
@@ -1305,9 +1242,7 @@ class TestCleanNewslettersEdgeCases:
         """clean-newsletters with account uses single-account script (line 127)."""
         from mxctl.commands.mail.inbox_tools import cmd_clean_newsletters
 
-        rows = "\n".join(
-            f"noreply@news.com{FIELD_SEPARATOR}true" for _ in range(3)
-        )
+        rows = "\n".join(f"noreply@news.com{FIELD_SEPARATOR}true" for _ in range(3))
         mock_run.return_value = rows + "\n"
 
         args = _make_args(account="iCloud", mailbox="INBOX", limit=200)
@@ -1322,12 +1257,7 @@ class TestCleanNewslettersEdgeCases:
         """clean-newsletters skips blank lines in output (line 268 area)."""
         from mxctl.commands.mail.inbox_tools import cmd_clean_newsletters
 
-        rows = (
-            f"noreply@news.com{FIELD_SEPARATOR}true\n"
-            f"\n"
-            f"noreply@news.com{FIELD_SEPARATOR}false\n"
-            f"  \n"
-        )
+        rows = f"noreply@news.com{FIELD_SEPARATOR}true\n\nnoreply@news.com{FIELD_SEPARATOR}false\n  \n"
         mock_run.return_value = rows
 
         args = _make_args(account="iCloud", mailbox="INBOX", limit=200)
@@ -1345,18 +1275,12 @@ class TestWeeklyReviewEdgeCases:
         """weekly-review skips blank lines in flagged results (line 378)."""
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
-        flagged_row1 = (
-            f"111{FIELD_SEPARATOR}Action Required{FIELD_SEPARATOR}"
-            f"boss@work.com{FIELD_SEPARATOR}Mon Jan 01 2026"
-        )
-        flagged_row2 = (
-            f"112{FIELD_SEPARATOR}Also Important{FIELD_SEPARATOR}"
-            f"ceo@work.com{FIELD_SEPARATOR}Tue Jan 02 2026"
-        )
+        flagged_row1 = f"111{FIELD_SEPARATOR}Action Required{FIELD_SEPARATOR}boss@work.com{FIELD_SEPARATOR}Mon Jan 01 2026"
+        flagged_row2 = f"112{FIELD_SEPARATOR}Also Important{FIELD_SEPARATOR}ceo@work.com{FIELD_SEPARATOR}Tue Jan 02 2026"
         mock_run.side_effect = [
             flagged_row1 + "\n\n  \n" + flagged_row2 + "\n",  # flagged with blank lines between
-            "",                                                 # attachments
-            "",                                                 # unreplied
+            "",  # attachments
+            "",  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -1371,18 +1295,12 @@ class TestWeeklyReviewEdgeCases:
         """weekly-review skips blank lines in attachment results (line 388)."""
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
-        attach_row1 = (
-            f"222{FIELD_SEPARATOR}Budget{FIELD_SEPARATOR}"
-            f"finance@corp.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}3"
-        )
-        attach_row2 = (
-            f"223{FIELD_SEPARATOR}Report{FIELD_SEPARATOR}"
-            f"hr@corp.com{FIELD_SEPARATOR}Wed{FIELD_SEPARATOR}1"
-        )
+        attach_row1 = f"222{FIELD_SEPARATOR}Budget{FIELD_SEPARATOR}finance@corp.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}3"
+        attach_row2 = f"223{FIELD_SEPARATOR}Report{FIELD_SEPARATOR}hr@corp.com{FIELD_SEPARATOR}Wed{FIELD_SEPARATOR}1"
         mock_run.side_effect = [
-            "",                                                   # flagged
-            attach_row1 + "\n\n" + attach_row2 + "\n",           # attachments with blank between
-            "",                                                   # unreplied
+            "",  # flagged
+            attach_row1 + "\n\n" + attach_row2 + "\n",  # attachments with blank between
+            "",  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -1397,18 +1315,12 @@ class TestWeeklyReviewEdgeCases:
         """weekly-review skips blank lines in unreplied results (line 399)."""
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
-        unreplied_row1 = (
-            f"333{FIELD_SEPARATOR}Follow Up{FIELD_SEPARATOR}"
-            f"colleague@work.com{FIELD_SEPARATOR}Wed"
-        )
-        unreplied_row2 = (
-            f"334{FIELD_SEPARATOR}Check In{FIELD_SEPARATOR}"
-            f"friend@gmail.com{FIELD_SEPARATOR}Thu"
-        )
+        unreplied_row1 = f"333{FIELD_SEPARATOR}Follow Up{FIELD_SEPARATOR}colleague@work.com{FIELD_SEPARATOR}Wed"
+        unreplied_row2 = f"334{FIELD_SEPARATOR}Check In{FIELD_SEPARATOR}friend@gmail.com{FIELD_SEPARATOR}Thu"
         mock_run.side_effect = [
-            "",                                                       # flagged
-            "",                                                       # attachments
-            unreplied_row1 + "\n\n  \n" + unreplied_row2 + "\n",     # unreplied with blanks between
+            "",  # flagged
+            "",  # attachments
+            unreplied_row1 + "\n\n  \n" + unreplied_row2 + "\n",  # unreplied with blanks between
         ]
 
         args = mock_args(days=7)
@@ -1424,9 +1336,9 @@ class TestWeeklyReviewEdgeCases:
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
         mock_run.side_effect = [
-            "",                       # flagged
-            "",                       # attachments
-            "bad-line-no-sep\n",      # unreplied — malformed
+            "",  # flagged
+            "",  # attachments
+            "bad-line-no-sep\n",  # unreplied — malformed
         ]
 
         args = mock_args(days=7)
@@ -1441,18 +1353,12 @@ class TestWeeklyReviewEdgeCases:
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
         # One noreply sender, one real person
-        noreply_row = (
-            f"444{FIELD_SEPARATOR}Auto Notification{FIELD_SEPARATOR}"
-            f"noreply@service.com{FIELD_SEPARATOR}Thu"
-        )
-        person_row = (
-            f"445{FIELD_SEPARATOR}Real Question{FIELD_SEPARATOR}"
-            f"colleague@work.com{FIELD_SEPARATOR}Thu"
-        )
+        noreply_row = f"444{FIELD_SEPARATOR}Auto Notification{FIELD_SEPARATOR}noreply@service.com{FIELD_SEPARATOR}Thu"
+        person_row = f"445{FIELD_SEPARATOR}Real Question{FIELD_SEPARATOR}colleague@work.com{FIELD_SEPARATOR}Thu"
         mock_run.side_effect = [
-            "",                                        # flagged
-            "",                                        # attachments
-            noreply_row + "\n" + person_row + "\n",    # unreplied
+            "",  # flagged
+            "",  # attachments
+            noreply_row + "\n" + person_row + "\n",  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -1469,14 +1375,11 @@ class TestWeeklyReviewEdgeCases:
 
         rows = ""
         for i in range(12):
-            rows += (
-                f"{i}{FIELD_SEPARATOR}Flag {i}{FIELD_SEPARATOR}"
-                f"s{i}@x.com{FIELD_SEPARATOR}Mon\n"
-            )
+            rows += f"{i}{FIELD_SEPARATOR}Flag {i}{FIELD_SEPARATOR}s{i}@x.com{FIELD_SEPARATOR}Mon\n"
         mock_run.side_effect = [
-            rows,   # flagged
-            "",     # attachments
-            "",     # unreplied
+            rows,  # flagged
+            "",  # attachments
+            "",  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -1492,14 +1395,11 @@ class TestWeeklyReviewEdgeCases:
 
         rows = ""
         for i in range(11):
-            rows += (
-                f"{i}{FIELD_SEPARATOR}Attach {i}{FIELD_SEPARATOR}"
-                f"s{i}@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}2\n"
-            )
+            rows += f"{i}{FIELD_SEPARATOR}Attach {i}{FIELD_SEPARATOR}s{i}@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}2\n"
         mock_run.side_effect = [
-            "",     # flagged
-            rows,   # attachments
-            "",     # unreplied
+            "",  # flagged
+            rows,  # attachments
+            "",  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -1515,14 +1415,11 @@ class TestWeeklyReviewEdgeCases:
 
         rows = ""
         for i in range(13):
-            rows += (
-                f"{i}{FIELD_SEPARATOR}Reply {i}{FIELD_SEPARATOR}"
-                f"p{i}@gmail.com{FIELD_SEPARATOR}Mon\n"
-            )
+            rows += f"{i}{FIELD_SEPARATOR}Reply {i}{FIELD_SEPARATOR}p{i}@gmail.com{FIELD_SEPARATOR}Mon\n"
         mock_run.side_effect = [
-            "",     # flagged
-            "",     # attachments
-            rows,   # unreplied
+            "",  # flagged
+            "",  # attachments
+            rows,  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -1536,14 +1433,11 @@ class TestWeeklyReviewEdgeCases:
         """weekly-review shows 'Reply to pending messages' when unreplied exist (line 456)."""
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
-        person_row = (
-            f"500{FIELD_SEPARATOR}Need Response{FIELD_SEPARATOR}"
-            f"colleague@work.com{FIELD_SEPARATOR}Mon"
-        )
+        person_row = f"500{FIELD_SEPARATOR}Need Response{FIELD_SEPARATOR}colleague@work.com{FIELD_SEPARATOR}Mon"
         mock_run.side_effect = [
-            "",                      # flagged
-            "",                      # attachments
-            person_row + "\n",       # unreplied
+            "",  # flagged
+            "",  # attachments
+            person_row + "\n",  # unreplied
         ]
 
         args = mock_args(days=7)
@@ -1557,14 +1451,11 @@ class TestWeeklyReviewEdgeCases:
         """weekly-review shows attachment review suggestion when attachments exist."""
         from mxctl.commands.mail.inbox_tools import cmd_weekly_review
 
-        attach_row = (
-            f"600{FIELD_SEPARATOR}Invoice{FIELD_SEPARATOR}"
-            f"billing@corp.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}1"
-        )
+        attach_row = f"600{FIELD_SEPARATOR}Invoice{FIELD_SEPARATOR}billing@corp.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}1"
         mock_run.side_effect = [
-            "",                      # flagged
-            attach_row + "\n",       # attachments
-            "",                      # unreplied
+            "",  # flagged
+            attach_row + "\n",  # attachments
+            "",  # unreplied
         ]
 
         args = mock_args(days=7)

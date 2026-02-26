@@ -77,16 +77,18 @@ def log_batch_operation(
 ) -> None:
     """Log a batch operation for potential undo."""
     operations = _load_undo_log()
-    operations.append({
-        "timestamp": datetime.now().isoformat(),
-        "operation": operation_type,
-        "account": account,
-        "message_ids": message_ids,
-        "source_mailbox": source_mailbox,
-        "dest_mailbox": dest_mailbox,
-        "sender": sender,
-        "older_than_days": older_than_days,
-    })
+    operations.append(
+        {
+            "timestamp": datetime.now().isoformat(),
+            "operation": operation_type,
+            "account": account,
+            "message_ids": message_ids,
+            "source_mailbox": source_mailbox,
+            "dest_mailbox": dest_mailbox,
+            "sender": sender,
+            "older_than_days": older_than_days,
+        }
+    )
     _save_undo_log(operations)
 
 
@@ -97,49 +99,31 @@ def log_fence_operation(operation_type: str) -> None:
     skip past these operations and accidentally undo an earlier undoable entry.
     """
     operations = _load_undo_log(include_stale=True)
-    operations.append({
-        "type": "fence",
-        "operation": operation_type,
-        "timestamp": datetime.now().isoformat(),
-    })
+    operations.append(
+        {
+            "type": "fence",
+            "operation": operation_type,
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
     _save_undo_log(operations)
 
 
-def cmd_undo_list(args) -> None:
-    """List recent undoable operations."""
-    operations = _load_undo_log()
-    if not operations:
-        format_output(args, "No recent batch operations to undo.",
-                      json_data={"operations": []})
-        return
-
-    # Build text output
-    text = f"Recent batch operations ({len(operations)}):"
-    for i, op in enumerate(reversed(operations), 1):
-        is_fence = op.get("type") == "fence"
-        prefix = "[no undo] " if is_fence else ""
-        ts = op.get("timestamp", "")
-        text += f"\n  {i}. {prefix}{op['operation']} — {ts}"
-        if not is_fence:
-            if op.get("sender"):
-                text += f" from {op['sender']}"
-            if op.get("source_mailbox"):
-                text += f" from {op['source_mailbox']}"
-            if op.get("dest_mailbox"):
-                text += f" to {op['dest_mailbox']}"
-            if op.get("older_than_days"):
-                text += f" (older than {op['older_than_days']} days)"
-            text += f" ({len(op.get('message_ids', []))} messages)"
-
-    format_output(args, text, json_data={"operations": list(reversed(operations))})
+# ---------------------------------------------------------------------------
+# Data functions (plain args, return dicts/lists, no printing)
+# ---------------------------------------------------------------------------
 
 
-def cmd_undo(args) -> None:
-    """Undo the most recent batch operation."""
-    force = getattr(args, "force", False)
+def list_undo_history() -> list[dict]:
+    """Return the list of recent undoable operations."""
+    return _load_undo_log()
 
-    # Load all entries (including stale) so we can give a helpful message when
-    # there ARE entries but they're older than the freshness window.
+
+def undo_last(force: bool = False) -> dict:
+    """Undo the most recent batch operation. Returns result dict.
+
+    Raises SystemExit (via die()) on unrecoverable errors.
+    """
     all_ops = _load_undo_log(include_stale=True)
     fresh_ops = [op for op in all_ops if _is_fresh(op)]
 
@@ -147,7 +131,6 @@ def cmd_undo(args) -> None:
         die("No recent batch operations to undo.")
 
     if not fresh_ops and not force:
-        # There are entries but they're all stale — tell the user.
         most_recent = all_ops[-1]
         age = _entry_age_minutes(most_recent)
         age_str = f"{int(age)} minutes ago" if age is not None else "unknown time ago"
@@ -161,11 +144,8 @@ def cmd_undo(args) -> None:
     if not operations:
         die("No batch operations to undo.")  # pragma: no cover — earlier guards catch all empty cases
 
-    # Pop the most recent operation — do NOT write the log yet;
-    # only commit removal after the restore work succeeds.
     last_op = operations.pop()
 
-    # Fence sentinel: operation was run but cannot be undone.
     if last_op.get("type") == "fence":
         op_name = last_op.get("operation", "unknown")
         if not force:
@@ -174,7 +154,6 @@ def cmd_undo(args) -> None:
                 f"Use `mxctl undo --list` to see older undoable operations, "
                 f"or `mxctl undo --force` to skip to the next undoable entry."
             )
-        # --force: pop the fence and continue to the next entry
         if not operations:
             die("No undoable operations remain after skipping the fence.")
         last_op = operations.pop()
@@ -190,18 +169,12 @@ def cmd_undo(args) -> None:
 
     try:
         if operation_type == "batch-move":
-            # Reverse move: move messages back from dest
-            # Note: batch-move can pull from multiple source mailboxes, so we move back to INBOX as default
             dest_mailbox = last_op.get("dest_mailbox")
             if not dest_mailbox:
                 die("Incomplete operation data. Cannot undo batch-move.")
 
-            # Move messages back from dest to INBOX (safest default since source could be multiple mailboxes)
             dest_escaped = escape(dest_mailbox)
             inbox_escaped = escape("INBOX")
-
-            # Build AppleScript to move messages back
-            # We'll iterate through message_ids and try to move them
             id_list = ", ".join(str(mid) for mid in message_ids)
 
             script = f"""
@@ -228,32 +201,30 @@ def cmd_undo(args) -> None:
             result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
             moved = int(result) if result.isdigit() else 0
             sender = last_op.get("sender", "unknown sender")
-            _save_undo_log(operations)  # commit removal only on success
+            _save_undo_log(operations)
             total = len(message_ids)
             if moved == 0:
                 msg = f"Nothing to restore (0 of {total} messages found — they may have already been moved or deleted)."
             else:
                 msg = f"Undid batch-move: moved {moved}/{total} messages from '{sender}' back to INBOX from '{dest_mailbox}'."
-            format_output(args, msg,
-                          json_data={
-                              "operation": "undo-batch-move",
-                              "account": account,
-                              "from_mailbox": dest_mailbox,
-                              "to_mailbox": "INBOX",
-                              "sender": sender,
-                              "restored": moved,
-                              "total": len(message_ids),
-                          })
+            return {
+                "message": msg,
+                "operation": "undo-batch-move",
+                "account": account,
+                "from_mailbox": dest_mailbox,
+                "to_mailbox": "INBOX",
+                "sender": sender,
+                "restored": moved,
+                "total": total,
+            }
 
         elif operation_type == "batch-delete":
-            # Reverse delete: move messages from Trash back to source_mailbox (or INBOX if unknown)
             source_mailbox = last_op.get("source_mailbox")
             restore_mailbox = source_mailbox if source_mailbox else "INBOX"
             restore_note = None if source_mailbox else "Original mailbox unknown; restored to INBOX."
 
             trash_escaped = escape("Trash")
             restore_escaped = escape(restore_mailbox)
-
             id_list = ", ".join(str(mid) for mid in message_ids)
 
             script = f"""
@@ -288,31 +259,76 @@ def cmd_undo(args) -> None:
             if restore_note and moved > 0:
                 msg += f" Note: {restore_note}"
             json_result = {
+                "message": msg,
                 "operation": "undo-batch-delete",
                 "account": account,
                 "from_mailbox": "Trash",
                 "to_mailbox": restore_mailbox,
                 "sender": sender,
                 "restored": moved,
-                "total": len(message_ids),
+                "total": total,
             }
             if restore_note:
                 json_result["note"] = restore_note
-            _save_undo_log(operations)  # commit removal only on success
-            format_output(args, msg, json_data=json_result)
+            _save_undo_log(operations)
+            return json_result
 
         else:
             die(f"Unknown operation type '{operation_type}'. Cannot undo.")
 
     except (Exception, KeyboardInterrupt):
         operations.append(last_op)
-        _save_undo_log(operations)  # put it back
+        _save_undo_log(operations)
         raise
+
+    # Unreachable, but satisfies type checker
+    return {}  # pragma: no cover
+
+
+# ---------------------------------------------------------------------------
+# CLI handlers
+# ---------------------------------------------------------------------------
+
+
+def cmd_undo_list(args) -> None:
+    """List recent undoable operations."""
+    operations = list_undo_history()
+    if not operations:
+        format_output(args, "No recent batch operations to undo.", json_data={"operations": []})
+        return
+
+    text = f"Recent batch operations ({len(operations)}):"
+    for i, op in enumerate(reversed(operations), 1):
+        is_fence = op.get("type") == "fence"
+        prefix = "[no undo] " if is_fence else ""
+        ts = op.get("timestamp", "")
+        text += f"\n  {i}. {prefix}{op['operation']} — {ts}"
+        if not is_fence:
+            if op.get("sender"):
+                text += f" from {op['sender']}"
+            if op.get("source_mailbox"):
+                text += f" from {op['source_mailbox']}"
+            if op.get("dest_mailbox"):
+                text += f" to {op['dest_mailbox']}"
+            if op.get("older_than_days"):
+                text += f" (older than {op['older_than_days']} days)"
+            text += f" ({len(op.get('message_ids', []))} messages)"
+
+    format_output(args, text, json_data={"operations": list(reversed(operations))})
+
+
+def cmd_undo(args) -> None:
+    """Undo the most recent batch operation."""
+    force = getattr(args, "force", False)
+    result = undo_last(force=force)
+    msg = result.pop("message", "")
+    format_output(args, msg, json_data=result)
 
 
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+
 
 def register(subparsers) -> None:
     """Register undo mail subcommands."""

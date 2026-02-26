@@ -72,9 +72,7 @@ class TestParseEmailHeaders:
     def test_duplicate_keys_multiline(self):
         raw = "Received: server1\n continuation1\nReceived: server2\n continuation2"
         headers = parse_email_headers(raw)
-        assert headers == {
-            "Received": ["server1 continuation1", "server2 continuation2"]
-        }
+        assert headers == {"Received": ["server1 continuation1", "server2 continuation2"]}
 
     def test_tab_continuation(self):
         raw = "Subject: First line\n\tSecond line"

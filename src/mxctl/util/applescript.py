@@ -34,13 +34,11 @@ def _warn_automation_once() -> None:
         terminal_app = "Terminal"
 
     print(
-        "Note: macOS will ask for Automation permission to control Mail.app. "
-        "If prompted, click Allow.",
+        "Note: macOS will ask for Automation permission to control Mail.app. If prompted, click Allow.",
         file=sys.stderr,
     )
     print(
-        f"  If you see 'not authorized': System Settings → Privacy & Security → "
-        f"Automation → {terminal_app} → enable Mail.",
+        f"  If you see 'not authorized': System Settings → Privacy & Security → Automation → {terminal_app} → enable Mail.",
         file=sys.stderr,
     )
 
@@ -89,7 +87,7 @@ def escape(s: str | None) -> str:
     s = s.replace('"', '\\"')
     s = s.replace("\n", "\\n")
     s = s.replace("\r", "\\r")
-    s = re.sub(r'[\x00-\x1f]', '', s)
+    s = re.sub(r"[\x00-\x1f]", "", s)
     return s
 
 

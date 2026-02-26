@@ -10,6 +10,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_args(**kwargs):
     defaults = {"json": False, "account": "iCloud", "mailbox": "INBOX"}
     defaults.update(kwargs)
@@ -20,6 +21,7 @@ def _make_args(**kwargs):
 # compose.py: cmd_draft error paths
 # ---------------------------------------------------------------------------
 
+
 class TestDraftErrors:
     def test_draft_no_account_dies(self, monkeypatch):
         from mxctl.commands.mail.compose import cmd_draft
@@ -27,8 +29,7 @@ class TestDraftErrors:
         monkeypatch.setattr("mxctl.commands.mail.compose.resolve_account", lambda _: None)
 
         with pytest.raises(SystemExit):
-            cmd_draft(_make_args(account=None, to="x@y.com", subject="S", body="B",
-                                 template=None, cc=None, bcc=None))
+            cmd_draft(_make_args(account=None, to="x@y.com", subject="S", body="B", template=None, cc=None, bcc=None))
 
     def test_draft_no_subject_no_template_dies(self, monkeypatch):
         from mxctl.commands.mail.compose import cmd_draft
@@ -36,8 +37,7 @@ class TestDraftErrors:
         monkeypatch.setattr("mxctl.commands.mail.compose.resolve_account", lambda _: "iCloud")
 
         with pytest.raises(SystemExit):
-            cmd_draft(_make_args(to="x@y.com", subject=None, body="hello",
-                                 template=None, cc=None, bcc=None))
+            cmd_draft(_make_args(to="x@y.com", subject=None, body="hello", template=None, cc=None, bcc=None))
 
     def test_draft_no_body_no_template_dies(self, monkeypatch):
         from mxctl.commands.mail.compose import cmd_draft
@@ -45,8 +45,7 @@ class TestDraftErrors:
         monkeypatch.setattr("mxctl.commands.mail.compose.resolve_account", lambda _: "iCloud")
 
         with pytest.raises(SystemExit):
-            cmd_draft(_make_args(to="x@y.com", subject="hello", body=None,
-                                 template=None, cc=None, bcc=None))
+            cmd_draft(_make_args(to="x@y.com", subject="hello", body=None, template=None, cc=None, bcc=None))
 
     def test_draft_template_not_found_dies(self, monkeypatch, tmp_path):
         from mxctl.commands.mail.compose import cmd_draft
@@ -61,8 +60,7 @@ class TestDraftErrors:
         monkeypatch.setattr("mxctl.commands.mail.compose.TEMPLATES_FILE", tpl_file)
 
         with pytest.raises(SystemExit):
-            cmd_draft(_make_args(to="x@y.com", subject=None, body=None,
-                                 template="missing", cc=None, bcc=None))
+            cmd_draft(_make_args(to="x@y.com", subject=None, body=None, template="missing", cc=None, bcc=None))
 
     def test_draft_corrupt_template_file_dies(self, monkeypatch, tmp_path):
         from mxctl.commands.mail.compose import cmd_draft
@@ -76,24 +74,22 @@ class TestDraftErrors:
         monkeypatch.setattr("mxctl.commands.mail.compose.TEMPLATES_FILE", tpl_file)
 
         with pytest.raises(SystemExit):
-            cmd_draft(_make_args(to="x@y.com", subject=None, body=None,
-                                 template="any", cc=None, bcc=None))
+            cmd_draft(_make_args(to="x@y.com", subject=None, body=None, template="any", cc=None, bcc=None))
 
     def test_draft_no_templates_file_dies(self, monkeypatch, tmp_path):
         from mxctl.commands.mail.compose import cmd_draft
 
         monkeypatch.setattr("mxctl.commands.mail.compose.resolve_account", lambda _: "iCloud")
-        monkeypatch.setattr("mxctl.commands.mail.compose.TEMPLATES_FILE",
-                            str(tmp_path / "nonexistent.json"))
+        monkeypatch.setattr("mxctl.commands.mail.compose.TEMPLATES_FILE", str(tmp_path / "nonexistent.json"))
 
         with pytest.raises(SystemExit):
-            cmd_draft(_make_args(to="x@y.com", subject=None, body=None,
-                                 template="any", cc=None, bcc=None))
+            cmd_draft(_make_args(to="x@y.com", subject=None, body=None, template="any", cc=None, bcc=None))
 
 
 # ---------------------------------------------------------------------------
 # batch.py: dry-run effective_count edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestBatchMoveEffectiveCount:
     def test_dry_run_with_limit_caps_count(self, monkeypatch, capsys):
@@ -103,8 +99,7 @@ class TestBatchMoveEffectiveCount:
         mock_run = Mock(return_value="50")
         monkeypatch.setattr("mxctl.commands.mail.batch.run", mock_run)
 
-        args = _make_args(from_sender="test@x.com", to_mailbox="Archive",
-                          dry_run=True, limit=10)
+        args = _make_args(from_sender="test@x.com", to_mailbox="Archive", dry_run=True, limit=10)
         cmd_batch_move(args)
 
         out = capsys.readouterr().out
@@ -117,8 +112,7 @@ class TestBatchMoveEffectiveCount:
         mock_run = Mock(return_value="25")
         monkeypatch.setattr("mxctl.commands.mail.batch.run", mock_run)
 
-        args = _make_args(from_sender="test@x.com", to_mailbox="Archive",
-                          dry_run=True, limit=None)
+        args = _make_args(from_sender="test@x.com", to_mailbox="Archive", dry_run=True, limit=None)
         cmd_batch_move(args)
 
         out = capsys.readouterr().out
@@ -133,8 +127,7 @@ class TestBatchDeleteEffectiveCount:
         mock_run = Mock(return_value="100")
         monkeypatch.setattr("mxctl.commands.mail.batch.run", mock_run)
 
-        args = _make_args(from_sender="spam@x.com", older_than=None,
-                          dry_run=True, limit=20, force=False)
+        args = _make_args(from_sender="spam@x.com", older_than=None, dry_run=True, limit=20, force=False)
         cmd_batch_delete(args)
 
         out = capsys.readouterr().out
@@ -147,8 +140,7 @@ class TestBatchDeleteEffectiveCount:
         mock_run = Mock(return_value="42")
         monkeypatch.setattr("mxctl.commands.mail.batch.run", mock_run)
 
-        args = _make_args(from_sender="spam@x.com", older_than=None,
-                          dry_run=True, limit=None, force=False)
+        args = _make_args(from_sender="spam@x.com", older_than=None, dry_run=True, limit=None, force=False)
         cmd_batch_delete(args)
 
         out = capsys.readouterr().out
@@ -158,6 +150,7 @@ class TestBatchDeleteEffectiveCount:
 # ---------------------------------------------------------------------------
 # todoist_integration.py: cmd_to_todoist
 # ---------------------------------------------------------------------------
+
 
 class TestCmdToTodoist:
     def test_to_todoist_missing_token_dies(self, monkeypatch):
@@ -192,9 +185,7 @@ class TestCmdToTodoist:
         )
 
         # Mock AppleScript run to return message data
-        mock_run = Mock(
-            return_value=f"Test Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}2026-01-15"
-        )
+        mock_run = Mock(return_value=f"Test Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}2026-01-15")
         monkeypatch.setattr("mxctl.commands.mail.todoist_integration.run", mock_run)
 
         # Mock the urllib HTTP call
@@ -217,6 +208,7 @@ class TestCmdToTodoist:
 # actions.py: cmd_unsubscribe
 # ---------------------------------------------------------------------------
 
+
 class TestCmdUnsubscribe:
     def test_unsubscribe_dry_run_shows_list_unsubscribe_url(self, monkeypatch, capsys):
         """Test that --dry-run shows the List-Unsubscribe URL from headers."""
@@ -230,13 +222,8 @@ class TestCmdUnsubscribe:
 
         # AppleScript returns subject + raw headers containing List-Unsubscribe
         unsub_url = "https://example.com/unsubscribe?token=abc123"
-        raw_headers = (
-            f"List-Unsubscribe: <{unsub_url}>\n"
-            "From: newsletter@example.com\n"
-        )
-        mock_run = Mock(
-            return_value=f"Newsletter Subject{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}{raw_headers}"
-        )
+        raw_headers = f"List-Unsubscribe: <{unsub_url}>\nFrom: newsletter@example.com\n"
+        mock_run = Mock(return_value=f"Newsletter Subject{FIELD_SEPARATOR}HEADER_SPLIT{FIELD_SEPARATOR}{raw_headers}")
         monkeypatch.setattr("mxctl.commands.mail.actions.run", mock_run)
 
         args = _make_args(id=99, dry_run=True, open=False)
@@ -251,6 +238,7 @@ class TestCmdUnsubscribe:
 # compose.py: cmd_draft happy path
 # ---------------------------------------------------------------------------
 
+
 class TestDraftHappyPath:
     def test_draft_creates_draft_successfully(self, monkeypatch, capsys):
         """Test that cmd_draft succeeds and prints the draft creation message."""
@@ -260,9 +248,9 @@ class TestDraftHappyPath:
         mock_run = Mock(return_value="draft created")
         monkeypatch.setattr("mxctl.commands.mail.compose.run", mock_run)
 
-        args = _make_args(to="recipient@example.com", subject="Hello there",
-                          body="This is the email body.", template=None,
-                          cc=None, bcc=None)
+        args = _make_args(
+            to="recipient@example.com", subject="Hello there", body="This is the email body.", template=None, cc=None, bcc=None
+        )
         cmd_draft(args)
 
         out = capsys.readouterr().out
@@ -279,9 +267,9 @@ class TestDraftHappyPath:
         mock_run = Mock(return_value="draft created")
         monkeypatch.setattr("mxctl.commands.mail.compose.run", mock_run)
 
-        args = _make_args(to="recipient@example.com", subject="Meeting",
-                          body="Let's meet.", template=None,
-                          cc="cc@example.com", bcc="bcc@example.com")
+        args = _make_args(
+            to="recipient@example.com", subject="Meeting", body="Let's meet.", template=None, cc="cc@example.com", bcc="bcc@example.com"
+        )
         cmd_draft(args)
 
         out = capsys.readouterr().out
@@ -297,9 +285,7 @@ class TestDraftHappyPath:
         mock_run = Mock(return_value="draft created")
         monkeypatch.setattr("mxctl.commands.mail.compose.run", mock_run)
 
-        args = _make_args(to="someone@example.com", subject="Test subject",
-                          body="Test body text.", template=None,
-                          cc=None, bcc=None)
+        args = _make_args(to="someone@example.com", subject="Test subject", body="Test body text.", template=None, cc=None, bcc=None)
         cmd_draft(args)
 
         out = capsys.readouterr().out
@@ -314,8 +300,7 @@ class TestDraftHappyPath:
         mock_run = Mock(return_value="draft created")
         monkeypatch.setattr("mxctl.commands.mail.compose.run", mock_run)
 
-        args = _make_args(to="r@example.com", subject="S", body="B",
-                          template=None, cc=None, bcc=None)
+        args = _make_args(to="r@example.com", subject="S", body="B", template=None, cc=None, bcc=None)
         cmd_draft(args)
 
         script_sent = mock_run.call_args[0][0]
@@ -329,6 +314,7 @@ class TestDraftHappyPath:
 # ---------------------------------------------------------------------------
 # batch.py: cmd_batch_read
 # ---------------------------------------------------------------------------
+
 
 class TestBatchRead:
     def test_batch_read_no_account_dies(self, monkeypatch):
@@ -389,6 +375,7 @@ class TestBatchRead:
 # batch.py: cmd_batch_flag
 # ---------------------------------------------------------------------------
 
+
 class TestBatchFlag:
     def test_batch_flag_no_account_dies(self, monkeypatch):
         """Test that cmd_batch_flag dies when no account is resolved."""
@@ -443,6 +430,7 @@ class TestBatchFlag:
 # batch.py: cmd_batch_move execution path (non-dry-run)
 # ---------------------------------------------------------------------------
 
+
 class TestBatchMoveExecution:
     def test_batch_move_no_account_dies(self, monkeypatch):
         """Test that cmd_batch_move dies when no account is resolved."""
@@ -451,8 +439,7 @@ class TestBatchMoveExecution:
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: None)
 
         with pytest.raises(SystemExit):
-            cmd_batch_move(_make_args(account=None, from_sender="s@x.com",
-                                      to_mailbox="Archive", dry_run=False, limit=None))
+            cmd_batch_move(_make_args(account=None, from_sender="s@x.com", to_mailbox="Archive", dry_run=False, limit=None))
 
     def test_batch_move_no_sender_dies(self, monkeypatch):
         """Test that cmd_batch_move dies when --from-sender is missing."""
@@ -461,8 +448,7 @@ class TestBatchMoveExecution:
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: "iCloud")
 
         with pytest.raises(SystemExit):
-            cmd_batch_move(_make_args(from_sender=None, to_mailbox="Archive",
-                                      dry_run=False, limit=None))
+            cmd_batch_move(_make_args(from_sender=None, to_mailbox="Archive", dry_run=False, limit=None))
 
     def test_batch_move_no_dest_mailbox_dies(self, monkeypatch):
         """Test that cmd_batch_move dies when --to-mailbox is missing."""
@@ -471,16 +457,14 @@ class TestBatchMoveExecution:
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: "iCloud")
 
         with pytest.raises(SystemExit):
-            cmd_batch_move(_make_args(from_sender="s@x.com", to_mailbox=None,
-                                      dry_run=False, limit=None))
+            cmd_batch_move(_make_args(from_sender="s@x.com", to_mailbox=None, dry_run=False, limit=None))
 
     def test_batch_move_actually_moves_messages(self, monkeypatch, capsys):
         """Test the live execution path of cmd_batch_move (not dry-run)."""
         from mxctl.commands.mail.batch import cmd_batch_move
 
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: "iCloud")
-        monkeypatch.setattr("mxctl.commands.mail.batch.resolve_mailbox",
-                            lambda account, mailbox: mailbox)
+        monkeypatch.setattr("mxctl.commands.mail.batch.resolve_mailbox", lambda account, mailbox: mailbox)
 
         # First call returns count (3 messages), second call returns move result
         # Move result: count on line 0, message IDs on subsequent lines
@@ -491,8 +475,7 @@ class TestBatchMoveExecution:
         mock_log = Mock()
         monkeypatch.setattr("mxctl.commands.mail.batch.log_batch_operation", mock_log)
 
-        args = _make_args(from_sender="sender@example.com", to_mailbox="Archive",
-                          dry_run=False, limit=None)
+        args = _make_args(from_sender="sender@example.com", to_mailbox="Archive", dry_run=False, limit=None)
         cmd_batch_move(args)
 
         out = capsys.readouterr().out
@@ -515,13 +498,11 @@ class TestBatchMoveExecution:
         from mxctl.commands.mail.batch import cmd_batch_move
 
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: "iCloud")
-        monkeypatch.setattr("mxctl.commands.mail.batch.resolve_mailbox",
-                            lambda account, mailbox: mailbox)
+        monkeypatch.setattr("mxctl.commands.mail.batch.resolve_mailbox", lambda account, mailbox: mailbox)
         mock_run = Mock(return_value="0")
         monkeypatch.setattr("mxctl.commands.mail.batch.run", mock_run)
 
-        args = _make_args(from_sender="nobody@example.com", to_mailbox="Archive",
-                          dry_run=False, limit=None)
+        args = _make_args(from_sender="nobody@example.com", to_mailbox="Archive", dry_run=False, limit=None)
         cmd_batch_move(args)
 
         out = capsys.readouterr().out
@@ -534,8 +515,7 @@ class TestBatchMoveExecution:
         from mxctl.commands.mail.batch import cmd_batch_move
 
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: "iCloud")
-        monkeypatch.setattr("mxctl.commands.mail.batch.resolve_mailbox",
-                            lambda account, mailbox: mailbox)
+        monkeypatch.setattr("mxctl.commands.mail.batch.resolve_mailbox", lambda account, mailbox: mailbox)
 
         move_result = "2\n2001\n2002"
         mock_run = Mock(side_effect=["10", move_result])
@@ -544,8 +524,7 @@ class TestBatchMoveExecution:
         mock_log = Mock()
         monkeypatch.setattr("mxctl.commands.mail.batch.log_batch_operation", mock_log)
 
-        args = _make_args(from_sender="bulk@example.com", to_mailbox="Bulk",
-                          dry_run=False, limit=2)
+        args = _make_args(from_sender="bulk@example.com", to_mailbox="Bulk", dry_run=False, limit=2)
         cmd_batch_move(args)
 
         out = capsys.readouterr().out

@@ -15,37 +15,131 @@ from mxctl.util.applescript_templates import set_message_property
 from mxctl.util.formatting import die, format_output, truncate
 from mxctl.util.mail_helpers import parse_email_headers, resolve_mailbox, resolve_message_context
 
+# ---------------------------------------------------------------------------
+# Data functions (plain args, return dicts, no printing)
+# ---------------------------------------------------------------------------
 
-def _mark_read_status(args, read_status: bool) -> None:
-    account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = validate_msg_id(args.id)
+
+def set_read_status(account: str, mailbox: str, message_id: int, read_status: bool) -> dict:
+    """Mark a message as read or unread. Returns result dict."""
+    acct_escaped = escape(account)
+    mb_escaped = escape(mailbox)
     read_val = "true" if read_status else "false"
 
-    script = set_message_property(
-        f'"{acct_escaped}"', f'"{mb_escaped}"', message_id,
-        'read status', read_val
-    )
+    script = set_message_property(f'"{acct_escaped}"', f'"{mb_escaped}"', message_id, "read status", read_val)
 
     subject = run(script)
     status_word = "read" if read_status else "unread"
-    format_output(args, f"Message '{truncate(subject, 50)}' marked as {status_word}.",
-                  json_data={"id": message_id, "subject": subject, "status": status_word})
+    return {"id": message_id, "subject": subject, "status": status_word, "account": account, "mailbox": mailbox}
 
 
-def _flag_status(args, flagged: bool) -> None:
-    account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = validate_msg_id(args.id)
+def set_flag_status(account: str, mailbox: str, message_id: int, flagged: bool) -> dict:
+    """Mark a message as flagged or unflagged. Returns result dict."""
+    acct_escaped = escape(account)
+    mb_escaped = escape(mailbox)
     flagged_val = "true" if flagged else "false"
 
-    script = set_message_property(
-        f'"{acct_escaped}"', f'"{mb_escaped}"', message_id,
-        'flagged status', flagged_val
-    )
+    script = set_message_property(f'"{acct_escaped}"', f'"{mb_escaped}"', message_id, "flagged status", flagged_val)
 
     subject = run(script)
     status_word = "flagged" if flagged else "unflagged"
-    format_output(args, f"Message '{truncate(subject, 50)}' {status_word}.",
-                  json_data={"id": message_id, "subject": subject, "status": status_word})
+    return {"id": message_id, "subject": subject, "status": status_word, "account": account, "mailbox": mailbox}
+
+
+def move_message(account: str, source_mailbox: str, message_id: int, dest_mailbox: str) -> dict:
+    """Move a message to a different mailbox. Returns result dict."""
+    acct_escaped = escape(account)
+    src_escaped = escape(source_mailbox)
+    dest_escaped = escape(dest_mailbox)
+
+    script = f"""
+    tell application "Mail"
+        set srcMb to mailbox "{src_escaped}" of account "{acct_escaped}"
+        set destMb to mailbox "{dest_escaped}" of account "{acct_escaped}"
+        set theMsg to first message of srcMb whose id is {message_id}
+        set msgSubject to subject of theMsg
+        move theMsg to destMb
+        return msgSubject
+    end tell
+    """
+
+    subject = run(script)
+    return {"id": message_id, "subject": subject, "from": source_mailbox, "to": dest_mailbox, "account": account}
+
+
+def delete_message(account: str, mailbox: str, message_id: int) -> dict:
+    """Delete a message by moving it to Trash. Returns result dict."""
+    acct_escaped = escape(account)
+    mb_escaped = escape(mailbox)
+
+    script = f"""
+    tell application "Mail"
+        set mb to mailbox "{mb_escaped}" of account "{acct_escaped}"
+        set theMsg to first message of mb whose id is {message_id}
+        set msgSubject to subject of theMsg
+        delete theMsg
+        return msgSubject
+    end tell
+    """
+
+    subject = run(script)
+    return {"id": message_id, "subject": subject, "status": "deleted", "account": account, "mailbox": mailbox}
+
+
+def mark_junk(account: str, mailbox: str, message_id: int) -> dict:
+    """Mark a message as junk. Returns result dict."""
+    acct_escaped = escape(account)
+    mb_escaped = escape(mailbox)
+
+    script = set_message_property(f'"{acct_escaped}"', f'"{mb_escaped}"', message_id, "junk mail status", "true")
+
+    subject = run(script)
+    return {"id": message_id, "subject": subject, "status": "junk", "account": account, "mailbox": mailbox}
+
+
+def open_message(account: str, mailbox: str, message_id: int) -> dict:
+    """Open a message in Mail.app. Returns result dict."""
+    acct_escaped = escape(account)
+    mb_escaped = escape(mailbox)
+
+    script = f"""
+    tell application "Mail"
+        set theMb to mailbox "{mb_escaped}" of account "{acct_escaped}"
+        set theMsg to (first message of theMb whose id is {message_id})
+        set msgSubject to subject of theMsg
+        if (count of message viewers) is 0 then
+            make new message viewer
+        end if
+        set selected mailboxes of first message viewer to {{theMb}}
+        set selected messages of first message viewer to {{theMsg}}
+        activate
+        return msgSubject
+    end tell
+    """
+
+    subject = run(script)
+    return {"opened": True, "message_id": message_id, "account": account, "mailbox": mailbox, "subject": subject}
+
+
+# ---------------------------------------------------------------------------
+# CLI handler helpers (take args, call data functions, print)
+# ---------------------------------------------------------------------------
+
+
+def _mark_read_status(args, read_status: bool) -> None:
+    account, mailbox, _, _ = resolve_message_context(args)
+    message_id = validate_msg_id(args.id)
+    result = set_read_status(account, mailbox, message_id, read_status)
+    status_word = result["status"]
+    format_output(args, f"Message '{truncate(result['subject'], 50)}' marked as {status_word}.", json_data=result)
+
+
+def _flag_status(args, flagged: bool) -> None:
+    account, mailbox, _, _ = resolve_message_context(args)
+    message_id = validate_msg_id(args.id)
+    result = set_flag_status(account, mailbox, message_id, flagged)
+    status_word = result["status"]
+    format_output(args, f"Message '{truncate(result['subject'], 50)}' {status_word}.", json_data=result)
 
 
 def cmd_mark_read(args) -> None:
@@ -79,52 +173,24 @@ def cmd_move(args) -> None:
         die("Both --from and --to mailboxes are required.")
     message_id = validate_msg_id(args.id)
 
-    acct_escaped = escape(account)
     source = resolve_mailbox(account, source)
     dest = resolve_mailbox(account, dest)
-    src_escaped = escape(source)
-    dest_escaped = escape(dest)
 
-    script = f"""
-    tell application "Mail"
-        set srcMb to mailbox "{src_escaped}" of account "{acct_escaped}"
-        set destMb to mailbox "{dest_escaped}" of account "{acct_escaped}"
-        set theMsg to first message of srcMb whose id is {message_id}
-        set msgSubject to subject of theMsg
-        move theMsg to destMb
-        return msgSubject
-    end tell
-    """
-
-    subject = run(script)
-    format_output(args, f"Message '{truncate(subject, 50)}' moved from '{source}' to '{dest}'.",
-                  json_data={"id": message_id, "subject": subject, "from": source, "to": dest})
+    result = move_message(account, source, message_id, dest)
+    format_output(args, f"Message '{truncate(result['subject'], 50)}' moved from '{source}' to '{dest}'.", json_data=result)
 
 
 def cmd_delete(args) -> None:
     """Delete a message by moving it to Trash."""
-    account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
+    account, mailbox, _, _ = resolve_message_context(args)
     message_id = validate_msg_id(args.id)
-
-    script = f"""
-    tell application "Mail"
-        set mb to mailbox "{mb_escaped}" of account "{acct_escaped}"
-        set theMsg to first message of mb whose id is {message_id}
-        set msgSubject to subject of theMsg
-        delete theMsg
-        return msgSubject
-    end tell
-    """
-
-    subject = run(script)
-    format_output(args, f"Message '{truncate(subject, 50)}' moved to Trash.",
-                  json_data={"id": message_id, "subject": subject, "status": "deleted"})
+    result = delete_message(account, mailbox, message_id)
+    format_output(args, f"Message '{truncate(result['subject'], 50)}' moved to Trash.", json_data=result)
 
 
 # ---------------------------------------------------------------------------
 # unsubscribe — extract List-Unsubscribe and act on it
 # ---------------------------------------------------------------------------
-
 
 
 _PRIVATE_NETWORKS = [
@@ -196,11 +262,11 @@ def cmd_unsubscribe(args) -> None:
         unsub_post = " ".join(unsub_post)
 
     if not unsub_header:
-        format_output(args,
-                      f"No unsubscribe option found for '{truncate(subject, 50)}'.\n"
-                      "This email doesn't include a List-Unsubscribe header.",
-                      json_data={"id": message_id, "subject": subject, "unsubscribe": False,
-                                "reason": "No List-Unsubscribe header found"})
+        format_output(
+            args,
+            f"No unsubscribe option found for '{truncate(subject, 50)}'.\nThis email doesn't include a List-Unsubscribe header.",
+            json_data={"id": message_id, "subject": subject, "unsubscribe": False, "reason": "No List-Unsubscribe header found"},
+        )
         return
 
     https_urls, mailto_urls = _extract_urls(unsub_header)
@@ -218,9 +284,17 @@ def cmd_unsubscribe(args) -> None:
             text += "\n  Mailto:"
             for u in mailto_urls:
                 text += f"\n    {u}"
-        format_output(args, text, json_data={
-            "id": message_id, "subject": subject, "one_click_supported": one_click,
-            "https_urls": https_urls, "mailto_urls": mailto_urls})
+        format_output(
+            args,
+            text,
+            json_data={
+                "id": message_id,
+                "subject": subject,
+                "one_click_supported": one_click,
+                "https_urls": https_urls,
+                "mailto_urls": mailto_urls,
+            },
+        )
         return
 
     # Attempt one-click unsubscribe (RFC 8058)
@@ -240,10 +314,11 @@ def cmd_unsubscribe(args) -> None:
             )
             resp = urllib.request.urlopen(req, timeout=APPLESCRIPT_TIMEOUT_SHORT, context=ctx)
             status = resp.status
-            format_output(args,
-                          f"Unsubscribed from '{truncate(subject, 50)}' via one-click (HTTP {status}).",
-                          json_data={"id": message_id, "subject": subject, "unsubscribed": True,
-                                    "method": "one-click", "status_code": status})
+            format_output(
+                args,
+                f"Unsubscribed from '{truncate(subject, 50)}' via one-click (HTTP {status}).",
+                json_data={"id": message_id, "subject": subject, "unsubscribed": True, "method": "one-click", "status_code": status},
+            )
             return
         except (urllib.error.URLError, OSError) as e:
             # One-click failed, fall through to browser
@@ -255,20 +330,21 @@ def cmd_unsubscribe(args) -> None:
     if https_urls:
         url = https_urls[0]
         subprocess.run(["open", url], check=False)
-        format_output(args,
-                      f"Opened unsubscribe page for '{truncate(subject, 50)}' in browser.",
-                      json_data={"id": message_id, "subject": subject, "unsubscribed": "pending",
-                                "method": "browser", "url": url})
+        format_output(
+            args,
+            f"Opened unsubscribe page for '{truncate(subject, 50)}' in browser.",
+            json_data={"id": message_id, "subject": subject, "unsubscribed": "pending", "method": "browser", "url": url},
+        )
         return
 
     # Only mailto available
     if mailto_urls:
         addr = mailto_urls[0].replace("mailto:", "")
-        format_output(args,
-                      f"No HTTPS unsubscribe link. Mailto only:\n  {addr}\n"
-                      "Send an email to that address to unsubscribe.",
-                      json_data={"id": message_id, "subject": subject, "unsubscribed": False,
-                                "method": "mailto_only", "mailto": addr})
+        format_output(
+            args,
+            f"No HTTPS unsubscribe link. Mailto only:\n  {addr}\nSend an email to that address to unsubscribe.",
+            json_data={"id": message_id, "subject": subject, "unsubscribed": False, "method": "mailto_only", "mailto": addr},
+        )
         return
 
 
@@ -276,39 +352,37 @@ def cmd_unsubscribe(args) -> None:
 # junk / not-junk
 # ---------------------------------------------------------------------------
 
+
 def cmd_junk(args) -> None:
     """Mark a message as junk or spam."""
     import sys
-    account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = validate_msg_id(args.id)
 
-    script = set_message_property(
-        f'"{acct_escaped}"', f'"{mb_escaped}"', message_id,
-        'junk mail status', 'true'
-    )
+    account, mailbox, _, _ = resolve_message_context(args)
+    message_id = validate_msg_id(args.id)
 
     # Run the AppleScript; if message not found, give a cross-account hint
     try:
-        subject = run(script)
+        result = mark_junk(account, mailbox, message_id)
     except SystemExit:
-        # run() already printed the error; add an actionable hint and re-raise
+        # mark_junk() already printed the error; add an actionable hint and re-raise
         explicit_account = getattr(args, "account", None)
         if not explicit_account:
             print(
-                "Hint: If this message belongs to another account, use -a ACCOUNT.\n"
-                "      Run `mxctl accounts` to see account names.",
+                "Hint: If this message belongs to another account, use -a ACCOUNT.\n      Run `mxctl accounts` to see account names.",
                 file=sys.stderr,
             )
         raise
 
     format_output(
         args,
-        f"Message '{truncate(subject, 50)}' marked as junk.",
-        json_data={"id": message_id, "subject": subject, "status": "junk"}
+        f"Message '{truncate(result['subject'], 50)}' marked as junk.",
+        json_data=result,
     )
 
 
-def _try_not_junk_in_mailbox(acct_escaped: str, junk_escaped: str, inbox_escaped: str, message_id: int, subject: str = "", sender: str = "") -> str | None:
+def _try_not_junk_in_mailbox(
+    acct_escaped: str, junk_escaped: str, inbox_escaped: str, message_id: int, subject: str = "", sender: str = ""
+) -> str | None:
     """Try to mark a message as not-junk from a specific mailbox.
 
     Uses subprocess directly so that individual mailbox attempts can fail silently
@@ -364,17 +438,13 @@ def _try_not_junk_in_mailbox(acct_escaped: str, junk_escaped: str, inbox_escaped
     if result.returncode == 0:
         return result.stdout.strip()
     err_lower = result.stderr.strip().lower()
-    if (
-        "can't get message" in err_lower
-        or "can't get mailbox" in err_lower
-        or "no messages matched" in err_lower
-    ):
+    if "can't get message" in err_lower or "can't get mailbox" in err_lower or "no messages matched" in err_lower:
         return None
     # Unexpected error — return None silently (don't leak internal AppleScript errors to user)
     return None
 
 
-def cmd_not_junk(args) -> None:
+def not_junk(account: str, message_id: int, custom_mailbox: str | None = None) -> dict:
     """Mark a message as not junk and move it back to INBOX.
 
     Searches the Junk mailbox (and Gmail [Gmail]/Spam for Gmail accounts) because
@@ -383,13 +453,11 @@ def cmd_not_junk(args) -> None:
 
     Uses subject+sender search (not ID) to find the message in the junk folder,
     since IDs are mailbox-specific and become stale after a cross-mailbox move.
-    If a custom -m MAILBOX is given, only that mailbox is tried.
+    If custom_mailbox is given, only that mailbox is tried.
+
+    Returns a result dict on success, or raises SystemExit on failure.
     """
     import sys
-    account = resolve_account(getattr(args, "account", None))
-    if not account:
-        die("Account required. Use -a ACCOUNT.")
-    message_id = validate_msg_id(args.id)
 
     acct_escaped = escape(account)
     inbox_mailbox = resolve_mailbox(account, "INBOX")
@@ -403,6 +471,7 @@ def cmd_not_junk(args) -> None:
     orig_sender = ""
     try:
         import subprocess as _subprocess
+
         fetch_script = f"""
         tell application "Mail"
             set acct to account "{acct_escaped}"
@@ -424,7 +493,6 @@ def cmd_not_junk(args) -> None:
     except Exception:
         pass  # Non-fatal — fall back to ID-based lookup below
 
-    custom_mailbox = getattr(args, "mailbox", None)
     if custom_mailbox:
         # User explicitly specified where to look — trust them, single attempt
         candidates = [resolve_mailbox(account, custom_mailbox)]
@@ -433,6 +501,7 @@ def cmd_not_junk(args) -> None:
         junk_primary = resolve_mailbox(account, "Junk")
         candidates = [junk_primary]
         from mxctl.config import get_gmail_accounts
+
         if account in get_gmail_accounts():
             if "[Gmail]/Spam" not in candidates:
                 candidates.append("[Gmail]/Spam")
@@ -448,16 +517,15 @@ def cmd_not_junk(args) -> None:
     for junk_mailbox in candidates:
         junk_escaped = escape(junk_mailbox)
         subject = _try_not_junk_in_mailbox(
-            acct_escaped, junk_escaped, inbox_escaped, message_id,
-            subject=orig_subject, sender=orig_sender,
+            acct_escaped,
+            junk_escaped,
+            inbox_escaped,
+            message_id,
+            subject=orig_subject,
+            sender=orig_sender,
         )
         if subject is not None:
-            format_output(
-                args,
-                f"Message '{truncate(subject, 50)}' marked as not junk and moved to INBOX.",
-                json_data={"id": message_id, "subject": subject, "status": "not_junk", "moved_to": "INBOX"}
-            )
-            return
+            return {"id": message_id, "subject": subject, "status": "not_junk", "moved_to": "INBOX"}
 
     # All candidates failed — message not found in any junk folder
     tried = ", ".join(f'"{m}"' for m in candidates)
@@ -469,43 +537,47 @@ def cmd_not_junk(args) -> None:
     sys.exit(1)
 
 
+def cmd_not_junk(args) -> None:
+    """Mark a message as not junk and move it back to INBOX.
+
+    Searches the Junk mailbox (and Gmail [Gmail]/Spam for Gmail accounts) because
+    AppleScript message IDs become invalid in the original mailbox once a message
+    is moved to Junk.
+
+    Uses subject+sender search (not ID) to find the message in the junk folder,
+    since IDs are mailbox-specific and become stale after a cross-mailbox move.
+    If a custom -m MAILBOX is given, only that mailbox is tried.
+    """
+    account = resolve_account(getattr(args, "account", None))
+    if not account:
+        die("Account required. Use -a ACCOUNT.")
+    message_id = validate_msg_id(args.id)
+    custom_mailbox = getattr(args, "mailbox", None)
+
+    result = not_junk(account, message_id, custom_mailbox=custom_mailbox)
+    format_output(
+        args,
+        f"Message '{truncate(result['subject'], 50)}' marked as not junk and moved to INBOX.",
+        json_data=result,
+    )
+
+
 def cmd_open(args) -> None:
     """Open a message in Mail.app."""
-    account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
+    account, mailbox, _, _ = resolve_message_context(args)
     message_id = validate_msg_id(args.id)
-
-    script = f"""
-    tell application "Mail"
-        set theMb to mailbox "{mb_escaped}" of account "{acct_escaped}"
-        set theMsg to (first message of theMb whose id is {message_id})
-        set msgSubject to subject of theMsg
-        if (count of message viewers) is 0 then
-            make new message viewer
-        end if
-        set selected mailboxes of first message viewer to {{theMb}}
-        set selected messages of first message viewer to {{theMsg}}
-        activate
-        return msgSubject
-    end tell
-    """
-
-    subject = run(script)
+    result = open_message(account, mailbox, message_id)
     format_output(
         args,
         f"Opened message {message_id} in Mail.app",
-        json_data={
-            "opened": True,
-            "message_id": message_id,
-            "account": account,
-            "mailbox": mailbox,
-            "subject": subject,
-        },
+        json_data=result,
     )
 
 
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+
 
 def register(subparsers) -> None:
     """Register message action subcommands."""

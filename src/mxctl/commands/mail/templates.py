@@ -26,6 +26,39 @@ def _save_templates(templates: dict) -> None:
     os.chmod(TEMPLATES_FILE, 0o600)
 
 
+def get_templates() -> list[dict]:
+    """Return all saved templates as a list of dicts."""
+    templates = _load_templates()
+    return [{"name": name, "subject": data.get("subject", ""), "body": data.get("body", "")} for name, data in templates.items()]
+
+
+def get_template(name: str) -> dict:
+    """Return a single template by name. Raises SystemExit if not found."""
+    templates = _load_templates()
+    if name not in templates:
+        die(f"Template '{name}' not found. Use 'mxctl templates list' to see available templates.")
+    template = templates[name]
+    return {"name": name, "subject": template.get("subject", ""), "body": template.get("body", "")}
+
+
+def create_template(name: str, subject: str, body: str) -> dict:
+    """Create or update a template. Returns the saved template dict."""
+    templates = _load_templates()
+    templates[name] = {"subject": subject, "body": body}
+    _save_templates(templates)
+    return {"name": name, "subject": subject, "body": body}
+
+
+def delete_template(name: str) -> dict:
+    """Delete a template by name. Returns confirmation dict."""
+    templates = _load_templates()
+    if name not in templates:
+        die(f"Template '{name}' not found.")
+    del templates[name]
+    _save_templates(templates)
+    return {"name": name, "deleted": True}
+
+
 def cmd_templates_list(args) -> None:
     """List all saved templates."""
     templates = _load_templates()
@@ -34,11 +67,7 @@ def cmd_templates_list(args) -> None:
         format_output(args, "No templates saved.")
         return
 
-    # Build JSON data
-    template_list = [
-        {"name": name, "subject": data.get("subject", ""), "body": data.get("body", "")}
-        for name, data in templates.items()
-    ]
+    template_list = get_templates()
 
     # Build text output
     text = "Email Templates:"
@@ -55,7 +84,6 @@ def cmd_templates_list(args) -> None:
 def cmd_templates_create(args) -> None:
     """Create or update a template."""
     name = args.name
-    templates = _load_templates()
 
     # Check if interactive or flag-based
     if args.subject is None or args.body is None:
@@ -69,10 +97,7 @@ def cmd_templates_create(args) -> None:
         subject = args.subject
         body = args.body
 
-    templates[name] = {"subject": subject, "body": body}
-    _save_templates(templates)
-
-    data = {"name": name, "subject": subject, "body": body}
+    data = create_template(name, subject, body)
     text = f"Template '{name}' saved successfully!\n\nSubject: {subject}\nBody: {body}"
     format_output(args, text, json_data=data)
 
@@ -80,16 +105,9 @@ def cmd_templates_create(args) -> None:
 def cmd_templates_show(args) -> None:
     """Show a specific template."""
     name = args.name
-    templates = _load_templates()
-
-    if name not in templates:
-        die(f"Template '{name}' not found. Use 'mxctl templates list' to see available templates.")
-
-    template = templates[name]
-    subject = template.get("subject", "")
-    body = template.get("body", "")
-
-    data = {"name": name, "subject": subject, "body": body}
+    data = get_template(name)
+    subject = data["subject"]
+    body = data["body"]
     text = f"Template: {name}\n\nSubject: {subject}\n\nBody:\n{body}"
     format_output(args, text, json_data=data)
 
@@ -97,15 +115,7 @@ def cmd_templates_show(args) -> None:
 def cmd_templates_delete(args) -> None:
     """Delete a template."""
     name = args.name
-    templates = _load_templates()
-
-    if name not in templates:
-        die(f"Template '{name}' not found.")
-
-    del templates[name]
-    _save_templates(templates)
-
-    data = {"name": name, "deleted": True}
+    data = delete_template(name)
     text = f"Template '{name}' deleted successfully."
     format_output(args, text, json_data=data)
 

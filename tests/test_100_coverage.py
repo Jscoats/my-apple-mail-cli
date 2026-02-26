@@ -39,6 +39,7 @@ from mxctl.config import FIELD_SEPARATOR, RECORD_SEPARATOR
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _args(**kwargs):
     defaults = {"json": False, "account": "iCloud", "mailbox": "INBOX"}
     defaults.update(kwargs)
@@ -88,7 +89,7 @@ class TestRunErrorPaths:
         import mxctl.util.applescript as as_mod
 
         monkeypatch.setattr(as_mod, "_automation_warned", True)
-        mock_result = Mock(returncode=1, stderr="Can\u2019t get mailbox \"Junk\" of account \"iCloud\".")
+        mock_result = Mock(returncode=1, stderr='Can\u2019t get mailbox "Junk" of account "iCloud".')
         monkeypatch.setattr("mxctl.util.applescript.subprocess.run", lambda *a, **kw: mock_result)
 
         with pytest.raises(SystemExit):
@@ -250,11 +251,16 @@ class TestCmdAccountsMissingLines:
         """Blank lines in AppleScript output are skipped (line 102)."""
         from mxctl.commands.mail.accounts import cmd_inbox
 
-        monkeypatch.setattr("mxctl.commands.mail.accounts.run", Mock(return_value=(
-            f"iCloud{FIELD_SEPARATOR}5{FIELD_SEPARATOR}100\n"
-            "\n"  # blank line
-            f"iCloud{FIELD_SEPARATOR}3{FIELD_SEPARATOR}50\n"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.accounts.run",
+            Mock(
+                return_value=(
+                    f"iCloud{FIELD_SEPARATOR}5{FIELD_SEPARATOR}100\n"
+                    "\n"  # blank line
+                    f"iCloud{FIELD_SEPARATOR}3{FIELD_SEPARATOR}50\n"
+                )
+            ),
+        )
 
         cmd_inbox(_args(account=None))
         out = capsys.readouterr().out
@@ -266,11 +272,16 @@ class TestCmdAccountsMissingLines:
 
         # The blank line must be BETWEEN real lines (not trailing) because result.strip()
         # removes trailing whitespace before split
-        monkeypatch.setattr("mxctl.commands.mail.accounts.run", Mock(return_value=(
-            f"iCloud{FIELD_SEPARATOR}John{FIELD_SEPARATOR}john@icloud.com{FIELD_SEPARATOR}true\n"
-            "\n"
-            f"Gmail{FIELD_SEPARATOR}Jane{FIELD_SEPARATOR}jane@gmail.com{FIELD_SEPARATOR}true"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.accounts.run",
+            Mock(
+                return_value=(
+                    f"iCloud{FIELD_SEPARATOR}John{FIELD_SEPARATOR}john@icloud.com{FIELD_SEPARATOR}true\n"
+                    "\n"
+                    f"Gmail{FIELD_SEPARATOR}Jane{FIELD_SEPARATOR}jane@gmail.com{FIELD_SEPARATOR}true"
+                )
+            ),
+        )
 
         cmd_accounts(_args())
         out = capsys.readouterr().out
@@ -302,11 +313,7 @@ class TestCmdAccountsMissingLines:
         """Blank lines in mailboxes output are skipped (line 250)."""
         from mxctl.commands.mail.accounts import cmd_mailboxes
 
-        monkeypatch.setattr("mxctl.commands.mail.accounts.run", Mock(return_value=(
-            f"INBOX{FIELD_SEPARATOR}5\n"
-            "\n"
-            f"Sent{FIELD_SEPARATOR}0\n"
-        )))
+        monkeypatch.setattr("mxctl.commands.mail.accounts.run", Mock(return_value=(f"INBOX{FIELD_SEPARATOR}5\n\nSent{FIELD_SEPARATOR}0\n")))
 
         cmd_mailboxes(_args(account="iCloud"))
         out = capsys.readouterr().out
@@ -399,7 +406,7 @@ class TestTryNotJunkErrors:
         """can't get message error returns None (line 372)."""
         from mxctl.commands.mail.actions import _try_not_junk_in_mailbox
 
-        mock_result = Mock(returncode=1, stdout="", stderr="Can't get message 42 of mailbox \"Junk\"")
+        mock_result = Mock(returncode=1, stdout="", stderr='Can\'t get message 42 of mailbox "Junk"')
         monkeypatch.setattr("subprocess.run", Mock(return_value=mock_result))
 
         result = _try_not_junk_in_mailbox("iCloud", "Junk", "INBOX", 42)
@@ -412,8 +419,7 @@ class TestTryNotJunkErrors:
         mock_result = Mock(returncode=1, stdout="", stderr="No messages matched the search criteria")
         monkeypatch.setattr("subprocess.run", Mock(return_value=mock_result))
 
-        result = _try_not_junk_in_mailbox("iCloud", "Junk", "INBOX", 42,
-                                          subject="Test", sender="sender@x.com")
+        result = _try_not_junk_in_mailbox("iCloud", "Junk", "INBOX", 42, subject="Test", sender="sender@x.com")
         assert result is None
 
     def test_unexpected_error_returns_none(self, monkeypatch):
@@ -482,10 +488,10 @@ class TestNotJunkGmailPaths:
         monkeypatch.setattr("mxctl.commands.mail.actions.resolve_account", lambda _: "Gmail")
         monkeypatch.setattr("mxctl.config.get_gmail_accounts", lambda: ["Gmail"])
         # resolve_mailbox("Junk") returns "[Gmail]/Spam" for Gmail, so candidates start with that
-        monkeypatch.setattr("mxctl.commands.mail.actions.resolve_mailbox",
-                            lambda acct, mb: "[Gmail]/Spam" if mb == "Junk" else mb)
+        monkeypatch.setattr("mxctl.commands.mail.actions.resolve_mailbox", lambda acct, mb: "[Gmail]/Spam" if mb == "Junk" else mb)
 
         call_count = [0]
+
         def mock_try_not_junk(acct, junk, inbox, msg_id, subject="", sender=""):
             call_count[0] += 1
             if call_count[0] == 2:  # Second candidate ([Gmail]/All Mail) succeeds
@@ -512,8 +518,7 @@ class TestNotJunkGmailPaths:
 
         monkeypatch.setattr("mxctl.commands.mail.actions.resolve_account", lambda _: "iCloud")
         monkeypatch.setattr("mxctl.config.get_gmail_accounts", lambda: [])
-        monkeypatch.setattr("mxctl.commands.mail.actions.resolve_mailbox",
-                            lambda acct, mb: mb)
+        monkeypatch.setattr("mxctl.commands.mail.actions.resolve_mailbox", lambda acct, mb: mb)
 
         # Mock the subprocess for fetching original subject/sender - SUCCEEDS
         mock_fetch = Mock()
@@ -538,8 +543,7 @@ class TestNotJunkGmailPaths:
 
         monkeypatch.setattr("mxctl.commands.mail.actions.resolve_account", lambda _: "iCloud")
         monkeypatch.setattr("mxctl.config.get_gmail_accounts", lambda: [])
-        monkeypatch.setattr("mxctl.commands.mail.actions.resolve_mailbox",
-                            lambda acct, mb: mb)
+        monkeypatch.setattr("mxctl.commands.mail.actions.resolve_mailbox", lambda acct, mb: mb)
 
         # Mock subprocess.run to raise an exception (e.g. OSError)
         monkeypatch.setattr("subprocess.run", Mock(side_effect=OSError("no such process")))
@@ -563,10 +567,10 @@ class TestNotJunkGmailPaths:
         monkeypatch.setattr("mxctl.config.get_gmail_accounts", lambda: ["Gmail"])
         # resolve_mailbox returns "Junk" as-is (not mapping to [Gmail]/Spam),
         # so [Gmail]/Spam is NOT already in candidates and gets appended
-        monkeypatch.setattr("mxctl.commands.mail.actions.resolve_mailbox",
-                            lambda acct, mb: mb)
+        monkeypatch.setattr("mxctl.commands.mail.actions.resolve_mailbox", lambda acct, mb: mb)
 
         call_count = [0]
+
         def mock_try(acct, junk, inbox, msg_id, subject="", sender=""):
             call_count[0] += 1
             if call_count[0] == 2:  # [Gmail]/Spam attempt succeeds
@@ -614,11 +618,16 @@ class TestAnalyticsMissingLines:
         from mxctl.commands.mail.analytics import cmd_digest
 
         # Blank line between real data lines (not trailing) to survive strip()
-        monkeypatch.setattr("mxctl.commands.mail.analytics.run", Mock(return_value=(
-            f"iCloud{FIELD_SEPARATOR}1{FIELD_SEPARATOR}Hello{FIELD_SEPARATOR}user@example.com{FIELD_SEPARATOR}Monday\n"
-            "\n"
-            f"iCloud{FIELD_SEPARATOR}2{FIELD_SEPARATOR}World{FIELD_SEPARATOR}other@example.com{FIELD_SEPARATOR}Tuesday"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.analytics.run",
+            Mock(
+                return_value=(
+                    f"iCloud{FIELD_SEPARATOR}1{FIELD_SEPARATOR}Hello{FIELD_SEPARATOR}user@example.com{FIELD_SEPARATOR}Monday\n"
+                    "\n"
+                    f"iCloud{FIELD_SEPARATOR}2{FIELD_SEPARATOR}World{FIELD_SEPARATOR}other@example.com{FIELD_SEPARATOR}Tuesday"
+                )
+            ),
+        )
 
         cmd_digest(_args())
         out = capsys.readouterr().out
@@ -628,9 +637,10 @@ class TestAnalyticsMissingLines:
         """Sender without @ domain falls into 'other' group (line 126)."""
         from mxctl.commands.mail.analytics import cmd_digest
 
-        monkeypatch.setattr("mxctl.commands.mail.analytics.run", Mock(return_value=(
-            f"iCloud{FIELD_SEPARATOR}1{FIELD_SEPARATOR}Hello{FIELD_SEPARATOR}NoEmailAddress{FIELD_SEPARATOR}Monday\n"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.analytics.run",
+            Mock(return_value=(f"iCloud{FIELD_SEPARATOR}1{FIELD_SEPARATOR}Hello{FIELD_SEPARATOR}NoEmailAddress{FIELD_SEPARATOR}Monday\n")),
+        )
 
         cmd_digest(_args())
         out = capsys.readouterr().out
@@ -656,11 +666,10 @@ class TestAnalyticsMissingLines:
         """Blank lines in stats --all mailbox output are skipped (line 226)."""
         from mxctl.commands.mail.analytics import cmd_stats
 
-        monkeypatch.setattr("mxctl.commands.mail.analytics.run", Mock(return_value=(
-            f"100{FIELD_SEPARATOR}10\n"
-            "\n"
-            f"iCloud{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}100{FIELD_SEPARATOR}10\n"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.analytics.run",
+            Mock(return_value=(f"100{FIELD_SEPARATOR}10\n\niCloud{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}100{FIELD_SEPARATOR}10\n")),
+        )
 
         args = _args(account="iCloud", all=True, mailbox=None)
         cmd_stats(args)
@@ -682,11 +691,16 @@ class TestAnalyticsMissingLines:
         from mxctl.commands.mail.analytics import cmd_show_flagged
 
         # Blank line between data lines to survive strip()
-        monkeypatch.setattr("mxctl.commands.mail.analytics.run", Mock(return_value=(
-            f"99{FIELD_SEPARATOR}Task{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
-            "\n"
-            f"100{FIELD_SEPARATOR}Task2{FIELD_SEPARATOR}z@w.com{FIELD_SEPARATOR}Tuesday{FIELD_SEPARATOR}Sent{FIELD_SEPARATOR}iCloud"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.analytics.run",
+            Mock(
+                return_value=(
+                    f"99{FIELD_SEPARATOR}Task{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+                    "\n"
+                    f"100{FIELD_SEPARATOR}Task2{FIELD_SEPARATOR}z@w.com{FIELD_SEPARATOR}Tuesday{FIELD_SEPARATOR}Sent{FIELD_SEPARATOR}iCloud"
+                )
+            ),
+        )
 
         cmd_show_flagged(_args(limit=25))
         out = capsys.readouterr().out
@@ -736,8 +750,7 @@ class TestAttachmentsMissingLines:
             "mxctl.commands.mail.attachments.resolve_message_context",
             lambda _: ("iCloud", "INBOX", "iCloud", "INBOX"),
         )
-        monkeypatch.setattr("mxctl.commands.mail.attachments.run",
-                            Mock(return_value="Subject\nreport-q1.pdf\nreport-q2.pdf"))
+        monkeypatch.setattr("mxctl.commands.mail.attachments.run", Mock(return_value="Subject\nreport-q1.pdf\nreport-q2.pdf"))
 
         args = _args(id=42, attachment="report", output_dir="/tmp")
         with pytest.raises(SystemExit):
@@ -751,8 +764,7 @@ class TestAttachmentsMissingLines:
             "mxctl.commands.mail.attachments.resolve_message_context",
             lambda _: ("iCloud", "INBOX", "iCloud", "INBOX"),
         )
-        monkeypatch.setattr("mxctl.commands.mail.attachments.run",
-                            Mock(return_value="Subject\nreal-file.pdf"))
+        monkeypatch.setattr("mxctl.commands.mail.attachments.run", Mock(return_value="Subject\nreal-file.pdf"))
 
         args = _args(id=42, attachment="nonexistent.doc", output_dir="/tmp")
         with pytest.raises(SystemExit):
@@ -766,16 +778,17 @@ class TestAttachmentsMissingLines:
             "mxctl.commands.mail.attachments.resolve_message_context",
             lambda _: ("iCloud", "INBOX", "iCloud", "INBOX"),
         )
-        monkeypatch.setattr("mxctl.commands.mail.attachments.run",
-                            Mock(side_effect=["Subject\nreport-final.pdf\nother.txt", "saved"]))
+        monkeypatch.setattr("mxctl.commands.mail.attachments.run", Mock(side_effect=["Subject\nreport-final.pdf\nother.txt", "saved"]))
 
         # Create fake file so existence check passes
         (tmp_path / "report-final.pdf").write_bytes(b"data")
         original_isfile = os.path.isfile
+
         def patched(p):
             if p == str(tmp_path / "report-final.pdf"):
                 return True
             return original_isfile(p)
+
         monkeypatch.setattr("mxctl.commands.mail.attachments.os.path.isfile", patched)
 
         args = _args(id=42, attachment="report", output_dir=str(tmp_path))
@@ -792,8 +805,7 @@ class TestAttachmentsMissingLines:
             "mxctl.commands.mail.attachments.resolve_message_context",
             lambda _: ("iCloud", "INBOX", "iCloud", "INBOX"),
         )
-        monkeypatch.setattr("mxctl.commands.mail.attachments.run",
-                            Mock(return_value="Subject\n../../etc/passwd"))
+        monkeypatch.setattr("mxctl.commands.mail.attachments.run", Mock(return_value="Subject\n../../etc/passwd"))
 
         args = _args(id=42, attachment="../../etc/passwd", output_dir=str(tmp_path))
         with pytest.raises(SystemExit):
@@ -827,8 +839,7 @@ class TestAttachmentsMissingLines:
             "mxctl.commands.mail.attachments.resolve_message_context",
             lambda _: ("iCloud", "INBOX", "iCloud", "INBOX"),
         )
-        monkeypatch.setattr("mxctl.commands.mail.attachments.run",
-                            Mock(side_effect=["Subject\nfile.pdf", "saved"]))
+        monkeypatch.setattr("mxctl.commands.mail.attachments.run", Mock(side_effect=["Subject\nfile.pdf", "saved"]))
         # Don't create the file - it should fail the existence check
 
         args = _args(id=42, attachment="file.pdf", output_dir=str(tmp_path))
@@ -851,8 +862,7 @@ class TestBatchMissingLines:
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: None)
 
         with pytest.raises(SystemExit):
-            cmd_batch_delete(_args(account=None, mailbox="INBOX", older_than=30,
-                                   from_sender=None, dry_run=False, force=False, limit=None))
+            cmd_batch_delete(_args(account=None, mailbox="INBOX", older_than=30, from_sender=None, dry_run=False, force=False, limit=None))
 
     def test_batch_delete_zero_results(self, monkeypatch, capsys):
         """batch-delete with zero matching messages reports nothing found (lines 273-276)."""
@@ -861,8 +871,7 @@ class TestBatchMissingLines:
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: "iCloud")
         monkeypatch.setattr("mxctl.commands.mail.batch.run", Mock(return_value="0"))
 
-        args = _args(mailbox="INBOX", older_than=30, from_sender=None,
-                     dry_run=False, force=True, limit=None)
+        args = _args(mailbox="INBOX", older_than=30, from_sender=None, dry_run=False, force=True, limit=None)
         cmd_batch_delete(args)
 
         out = capsys.readouterr().out
@@ -876,8 +885,7 @@ class TestBatchMissingLines:
         monkeypatch.setattr("mxctl.commands.mail.batch.run", Mock(return_value="5"))
 
         with pytest.raises(SystemExit):
-            cmd_batch_delete(_args(mailbox="INBOX", older_than=30, from_sender=None,
-                                   dry_run=False, force=False, limit=None))
+            cmd_batch_delete(_args(mailbox="INBOX", older_than=30, from_sender=None, dry_run=False, force=False, limit=None))
 
 
 # ===========================================================================
@@ -901,8 +909,7 @@ class TestComposeMissingLines:
 
         monkeypatch.setattr("mxctl.commands.mail.compose.TEMPLATES_FILE", tpl_file)
 
-        args = _args(to="x@y.com", subject=None, body=None,
-                     template="greeting", cc=None, bcc=None)
+        args = _args(to="x@y.com", subject=None, body=None, template="greeting", cc=None, bcc=None)
         cmd_draft(args)
 
         out = capsys.readouterr().out
@@ -922,8 +929,7 @@ class TestComposeMissingLines:
 
         monkeypatch.setattr("mxctl.commands.mail.compose.TEMPLATES_FILE", tpl_file)
 
-        args = _args(to="x@y.com", subject="Override Subject", body="Override Body",
-                     template="greeting", cc=None, bcc=None)
+        args = _args(to="x@y.com", subject="Override Subject", body="Override Body", template="greeting", cc=None, bcc=None)
         cmd_draft(args)
 
         out = capsys.readouterr().out
@@ -942,8 +948,7 @@ class TestComposeMissingLines:
         monkeypatch.setattr("mxctl.commands.mail.compose.TEMPLATES_FILE", tpl_file)
 
         with pytest.raises(SystemExit) as exc_info:
-            cmd_draft(_args(to="x@y.com", subject=None, body=None,
-                            template="test", cc=None, bcc=None))
+            cmd_draft(_args(to="x@y.com", subject=None, body=None, template="test", cc=None, bcc=None))
         assert exc_info.value.code == 1
 
     def test_draft_template_file_missing_dies(self, monkeypatch, tmp_path):
@@ -951,12 +956,10 @@ class TestComposeMissingLines:
         from mxctl.commands.mail.compose import cmd_draft
 
         monkeypatch.setattr("mxctl.commands.mail.compose.resolve_account", lambda _: "iCloud")
-        monkeypatch.setattr("mxctl.commands.mail.compose.TEMPLATES_FILE",
-                            str(tmp_path / "nonexistent.json"))
+        monkeypatch.setattr("mxctl.commands.mail.compose.TEMPLATES_FILE", str(tmp_path / "nonexistent.json"))
 
         with pytest.raises(SystemExit) as exc_info:
-            cmd_draft(_args(to="x@y.com", subject=None, body=None,
-                            template="any", cc=None, bcc=None))
+            cmd_draft(_args(to="x@y.com", subject=None, body=None, template="any", cc=None, bcc=None))
         assert exc_info.value.code == 1
 
 
@@ -990,10 +993,15 @@ class TestCompositeMissingLines:
         """Export single message to a directory creates file (line 83-84)."""
         from mxctl.commands.mail.composite import _export_single
 
-        monkeypatch.setattr("mxctl.commands.mail.composite.run", Mock(return_value=(
-            f"Test Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}"
-            f"Monday{FIELD_SEPARATOR}to@example.com{FIELD_SEPARATOR}Body content"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.composite.run",
+            Mock(
+                return_value=(
+                    f"Test Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}"
+                    f"Monday{FIELD_SEPARATOR}to@example.com{FIELD_SEPARATOR}Body content"
+                )
+            ),
+        )
 
         _export_single(_args(), 42, "iCloud", "INBOX", str(tmp_path))
 
@@ -1005,10 +1013,15 @@ class TestCompositeMissingLines:
         from mxctl.commands.mail.composite import _export_single
 
         # Subject that creates a traversal path
-        monkeypatch.setattr("mxctl.commands.mail.composite.run", Mock(return_value=(
-            f"../../../etc/passwd{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}"
-            f"Monday{FIELD_SEPARATOR}to@example.com{FIELD_SEPARATOR}Body"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.composite.run",
+            Mock(
+                return_value=(
+                    f"../../../etc/passwd{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}"
+                    f"Monday{FIELD_SEPARATOR}to@example.com{FIELD_SEPARATOR}Body"
+                )
+            ),
+        )
 
         # Need to create a scenario where the sanitized path escapes dest_path
         # The subject gets sanitized, so this path is actually safe.
@@ -1019,10 +1032,14 @@ class TestCompositeMissingLines:
         """Export single message to a specific file path (line 90-91)."""
         from mxctl.commands.mail.composite import _export_single
 
-        monkeypatch.setattr("mxctl.commands.mail.composite.run", Mock(return_value=(
-            f"Test{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}"
-            f"Monday{FIELD_SEPARATOR}to@example.com{FIELD_SEPARATOR}Content"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.composite.run",
+            Mock(
+                return_value=(
+                    f"Test{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}to@example.com{FIELD_SEPARATOR}Content"
+                )
+            ),
+        )
 
         filepath = str(tmp_path / "export.md")
         _export_single(_args(), 42, "iCloud", "INBOX", filepath)
@@ -1035,11 +1052,11 @@ class TestCompositeMissingLines:
         """Bulk export skips entries with too few fields (lines 106-108, 134-138)."""
         from mxctl.commands.mail.composite import _export_bulk
 
-        good_entry = (f"1{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@example.com"
-                      f"{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}Body content")
+        good_entry = f"1{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}Body content"
         bad_entry = "malformed"
-        monkeypatch.setattr("mxctl.commands.mail.composite.run",
-                            Mock(return_value=f"{good_entry}{RECORD_SEPARATOR}\n{bad_entry}{RECORD_SEPARATOR}\n"))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.composite.run", Mock(return_value=f"{good_entry}{RECORD_SEPARATOR}\n{bad_entry}{RECORD_SEPARATOR}\n")
+        )
 
         _export_bulk(_args(), "INBOX", "iCloud", str(tmp_path), None)
 
@@ -1053,10 +1070,8 @@ class TestCompositeMissingLines:
         # This entry has a subject that after sanitization may cause traversal
         # Actually the regex strips non-word chars, so we need to mock differently
         # The path traversal check skips the entry silently
-        entry = (f"1{FIELD_SEPARATOR}Normal{FIELD_SEPARATOR}sender@example.com"
-                 f"{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}Body")
-        monkeypatch.setattr("mxctl.commands.mail.composite.run",
-                            Mock(return_value=f"{entry}{RECORD_SEPARATOR}\n"))
+        entry = f"1{FIELD_SEPARATOR}Normal{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}Body"
+        monkeypatch.setattr("mxctl.commands.mail.composite.run", Mock(return_value=f"{entry}{RECORD_SEPARATOR}\n"))
 
         _export_bulk(_args(), "INBOX", "iCloud", str(tmp_path), None)
 
@@ -1067,10 +1082,8 @@ class TestCompositeMissingLines:
         """Bulk export with --after uses date filter (line 106-108)."""
         from mxctl.commands.mail.composite import _export_bulk
 
-        entry = (f"1{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@example.com"
-                 f"{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}Body")
-        monkeypatch.setattr("mxctl.commands.mail.composite.run",
-                            Mock(return_value=f"{entry}{RECORD_SEPARATOR}\n"))
+        entry = f"1{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}Body"
+        monkeypatch.setattr("mxctl.commands.mail.composite.run", Mock(return_value=f"{entry}{RECORD_SEPARATOR}\n"))
 
         _export_bulk(_args(), "INBOX", "iCloud", str(tmp_path), "2026-01-01")
 
@@ -1091,12 +1104,19 @@ class TestCompositeMissingLines:
         from mxctl.commands.mail.composite import cmd_thread
 
         # Blank line between data lines to survive strip()
-        monkeypatch.setattr("mxctl.commands.mail.composite.run", Mock(side_effect=[
-            "Subject",
-            (f"1{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
-             "\n"
-             f"2{FIELD_SEPARATOR}Re: Subject{FIELD_SEPARATOR}sender2{FIELD_SEPARATOR}Tuesday{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud"),
-        ]))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.composite.run",
+            Mock(
+                side_effect=[
+                    "Subject",
+                    (
+                        f"1{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+                        "\n"
+                        f"2{FIELD_SEPARATOR}Re: Subject{FIELD_SEPARATOR}sender2{FIELD_SEPARATOR}Tuesday{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud"
+                    ),
+                ]
+            ),
+        )
 
         cmd_thread(_args(id=42, limit=100, all_accounts=False))
         out = capsys.readouterr().out
@@ -1124,10 +1144,8 @@ class TestCompositeMissingLines:
         """export with non-numeric target triggers bulk export (line 39)."""
         from mxctl.commands.mail.composite import cmd_export
 
-        entry = (f"1{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@example.com"
-                 f"{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}Body")
-        monkeypatch.setattr("mxctl.commands.mail.composite.run",
-                            Mock(return_value=f"{entry}{RECORD_SEPARATOR}\n"))
+        entry = f"1{FIELD_SEPARATOR}Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}Monday{FIELD_SEPARATOR}Body"
+        monkeypatch.setattr("mxctl.commands.mail.composite.run", Mock(return_value=f"{entry}{RECORD_SEPARATOR}\n"))
 
         args = _args(target="INBOX", to=str(tmp_path), after=None, mailbox="INBOX")
         cmd_export(args)
@@ -1170,6 +1188,7 @@ class TestManageMissingLines:
 
         # First call (count) raises SystemExit, second call (delete) succeeds
         call_count = [0]
+
         def mock_run(script):
             call_count[0] += 1
             if call_count[0] == 1:
@@ -1192,8 +1211,7 @@ class TestManageMissingLines:
 
         monkeypatch.setattr("mxctl.commands.mail.manage.resolve_account", lambda _: "iCloud")
         monkeypatch.setattr("mxctl.commands.mail.manage.run", Mock(return_value="5"))
-        monkeypatch.setattr("mxctl.commands.mail.manage.subprocess.run",
-                            Mock(return_value=Mock(returncode=1, stderr="Some random error")))
+        monkeypatch.setattr("mxctl.commands.mail.manage.subprocess.run", Mock(return_value=Mock(returncode=1, stderr="Some random error")))
 
         with pytest.raises(SystemExit):
             cmd_empty_trash(_args(all=False))
@@ -1231,15 +1249,20 @@ class TestSystemMissingLines:
         """Multiple Authentication-Results headers joined (line 74)."""
         from mxctl.commands.mail.system import cmd_headers
 
-        monkeypatch.setattr("mxctl.commands.mail.system.run", Mock(return_value=(
-            "From: sender@example.com\n"
-            "To: recipient@example.com\n"
-            "Subject: Test\n"
-            "Date: Mon, 14 Feb 2026 10:00:00\n"
-            "Message-Id: <abc@example.com>\n"
-            "Authentication-Results: spf=pass\n"
-            "Authentication-Results: dkim=pass\n"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.system.run",
+            Mock(
+                return_value=(
+                    "From: sender@example.com\n"
+                    "To: recipient@example.com\n"
+                    "Subject: Test\n"
+                    "Date: Mon, 14 Feb 2026 10:00:00\n"
+                    "Message-Id: <abc@example.com>\n"
+                    "Authentication-Results: spf=pass\n"
+                    "Authentication-Results: dkim=pass\n"
+                )
+            ),
+        )
 
         cmd_headers(_args(id=42, raw=False))
         out = capsys.readouterr().out
@@ -1249,14 +1272,19 @@ class TestSystemMissingLines:
         """SPF softfail is detected (line 83)."""
         from mxctl.commands.mail.system import cmd_headers
 
-        monkeypatch.setattr("mxctl.commands.mail.system.run", Mock(return_value=(
-            "From: sender@example.com\n"
-            "To: recipient@example.com\n"
-            "Subject: Test\n"
-            "Date: Mon, 14 Feb 2026 10:00:00\n"
-            "Message-Id: <abc@example.com>\n"
-            "Authentication-Results: spf=softfail\n"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.system.run",
+            Mock(
+                return_value=(
+                    "From: sender@example.com\n"
+                    "To: recipient@example.com\n"
+                    "Subject: Test\n"
+                    "Date: Mon, 14 Feb 2026 10:00:00\n"
+                    "Message-Id: <abc@example.com>\n"
+                    "Authentication-Results: spf=softfail\n"
+                )
+            ),
+        )
 
         cmd_headers(_args(id=42, raw=False))
         out = capsys.readouterr().out
@@ -1266,14 +1294,19 @@ class TestSystemMissingLines:
         """Single Received header (string, not list) counts as 1 hop (line 96)."""
         from mxctl.commands.mail.system import cmd_headers
 
-        monkeypatch.setattr("mxctl.commands.mail.system.run", Mock(return_value=(
-            "From: sender@example.com\n"
-            "To: recipient@example.com\n"
-            "Subject: Test\n"
-            "Date: Mon, 14 Feb 2026 10:00:00\n"
-            "Message-Id: <abc@example.com>\n"
-            "Received: from server1\n"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.system.run",
+            Mock(
+                return_value=(
+                    "From: sender@example.com\n"
+                    "To: recipient@example.com\n"
+                    "Subject: Test\n"
+                    "Date: Mon, 14 Feb 2026 10:00:00\n"
+                    "Message-Id: <abc@example.com>\n"
+                    "Received: from server1\n"
+                )
+            ),
+        )
 
         cmd_headers(_args(id=42, raw=False))
         out = capsys.readouterr().out
@@ -1283,14 +1316,19 @@ class TestSystemMissingLines:
         """In-Reply-To header shown (line 106)."""
         from mxctl.commands.mail.system import cmd_headers
 
-        monkeypatch.setattr("mxctl.commands.mail.system.run", Mock(return_value=(
-            "From: sender@example.com\n"
-            "To: recipient@example.com\n"
-            "Subject: Re: Test\n"
-            "Date: Mon, 14 Feb 2026 10:00:00\n"
-            "Message-Id: <reply@example.com>\n"
-            "In-Reply-To: <original@example.com>\n"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.system.run",
+            Mock(
+                return_value=(
+                    "From: sender@example.com\n"
+                    "To: recipient@example.com\n"
+                    "Subject: Re: Test\n"
+                    "Date: Mon, 14 Feb 2026 10:00:00\n"
+                    "Message-Id: <reply@example.com>\n"
+                    "In-Reply-To: <original@example.com>\n"
+                )
+            ),
+        )
 
         cmd_headers(_args(id=42, raw=False))
         out = capsys.readouterr().out
@@ -1300,14 +1338,19 @@ class TestSystemMissingLines:
         """Return-Path header shown (line 108)."""
         from mxctl.commands.mail.system import cmd_headers
 
-        monkeypatch.setattr("mxctl.commands.mail.system.run", Mock(return_value=(
-            "From: sender@example.com\n"
-            "To: recipient@example.com\n"
-            "Subject: Test\n"
-            "Date: Mon, 14 Feb 2026 10:00:00\n"
-            "Message-Id: <abc@example.com>\n"
-            "Return-Path: <bounce@example.com>\n"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.system.run",
+            Mock(
+                return_value=(
+                    "From: sender@example.com\n"
+                    "To: recipient@example.com\n"
+                    "Subject: Test\n"
+                    "Date: Mon, 14 Feb 2026 10:00:00\n"
+                    "Message-Id: <abc@example.com>\n"
+                    "Return-Path: <bounce@example.com>\n"
+                )
+            ),
+        )
 
         cmd_headers(_args(id=42, raw=False))
         out = capsys.readouterr().out
@@ -1317,11 +1360,9 @@ class TestSystemMissingLines:
         """Blank lines in rules output are skipped (line 152)."""
         from mxctl.commands.mail.system import cmd_rules
 
-        monkeypatch.setattr("mxctl.commands.mail.system.run", Mock(return_value=(
-            f"My Rule{FIELD_SEPARATOR}true\n"
-            "\n"
-            f"Other Rule{FIELD_SEPARATOR}false\n"
-        )))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.system.run", Mock(return_value=(f"My Rule{FIELD_SEPARATOR}true\n\nOther Rule{FIELD_SEPARATOR}false\n"))
+        )
 
         cmd_rules(_args(action=None, rule_name=None))
         out = capsys.readouterr().out
@@ -1341,8 +1382,7 @@ class TestTemplatesMissingLines:
         """Show template when file doesn't exist dies with 'not found' (line 63-67 via _load_templates)."""
         from mxctl.commands.mail.templates import cmd_templates_show
 
-        monkeypatch.setattr("mxctl.commands.mail.templates.TEMPLATES_FILE",
-                            str(tmp_path / "missing.json"))
+        monkeypatch.setattr("mxctl.commands.mail.templates.TEMPLATES_FILE", str(tmp_path / "missing.json"))
 
         with pytest.raises(SystemExit):
             cmd_templates_show(_args(name="test"))
@@ -1351,8 +1391,7 @@ class TestTemplatesMissingLines:
         """Delete template when file doesn't exist dies with 'not found'."""
         from mxctl.commands.mail.templates import cmd_templates_delete
 
-        monkeypatch.setattr("mxctl.commands.mail.templates.TEMPLATES_FILE",
-                            str(tmp_path / "missing.json"))
+        monkeypatch.setattr("mxctl.commands.mail.templates.TEMPLATES_FILE", str(tmp_path / "missing.json"))
 
         with pytest.raises(SystemExit):
             cmd_templates_delete(_args(name="test"))
@@ -1383,27 +1422,30 @@ class TestTodoistMissingLines:
 
     def _todoist_args(self, **kwargs):
         defaults = {
-            "json": False, "account": "iCloud", "mailbox": "INBOX",
-            "id": 42, "project": None, "priority": 1, "due": None,
+            "json": False,
+            "account": "iCloud",
+            "mailbox": "INBOX",
+            "id": 42,
+            "project": None,
+            "priority": 1,
+            "due": None,
         }
         defaults.update(kwargs)
         return Namespace(**defaults)
 
     def _setup_todoist(self, monkeypatch, token="fake-token"):
         """Common setup for todoist tests."""
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.get_config",
-                            lambda: {"todoist_api_token": token})
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.run",
-                            Mock(return_value=f"Subject{FIELD_SEPARATOR}sender@x.com{FIELD_SEPARATOR}Monday"))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.get_config", lambda: {"todoist_api_token": token})
+        monkeypatch.setattr(
+            "mxctl.commands.mail.todoist_integration.run", Mock(return_value=f"Subject{FIELD_SEPARATOR}sender@x.com{FIELD_SEPARATOR}Monday")
+        )
 
     def test_message_read_fails(self, monkeypatch):
         """Too few fields from AppleScript dies (line 56)."""
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.get_config",
-                            lambda: {"todoist_api_token": "token"})
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.run",
-                            Mock(return_value="only-subject"))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.get_config", lambda: {"todoist_api_token": "token"})
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.run", Mock(return_value="only-subject"))
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args())
@@ -1413,8 +1455,7 @@ class TestTodoistMissingLines:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         self._setup_todoist(monkeypatch)
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(side_effect=ssl.SSLError("cert error")))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(side_effect=ssl.SSLError("cert error")))
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args(project="Work"))
@@ -1426,11 +1467,12 @@ class TestTodoistMissingLines:
         self._setup_todoist(monkeypatch)
         err = urllib.error.HTTPError(
             url="https://api.todoist.com/api/v1/projects",
-            code=500, msg="Server Error", hdrs=None,
+            code=500,
+            msg="Server Error",
+            hdrs=None,
             fp=MagicMock(read=Mock(return_value=b"Internal Server Error")),
         )
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(side_effect=err))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(side_effect=err))
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args(project="Work"))
@@ -1440,8 +1482,9 @@ class TestTodoistMissingLines:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         self._setup_todoist(monkeypatch)
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(side_effect=urllib.error.URLError("DNS failure")))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(side_effect=urllib.error.URLError("DNS failure"))
+        )
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args(project="Work"))
@@ -1451,8 +1494,7 @@ class TestTodoistMissingLines:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         self._setup_todoist(monkeypatch)
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(side_effect=TimeoutError()))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(side_effect=TimeoutError()))
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args(project="Work"))
@@ -1468,8 +1510,7 @@ class TestTodoistMissingLines:
         mock_resp.read.return_value = json.dumps(response_payload).encode("utf-8")
         mock_resp.__enter__ = lambda s: s
         mock_resp.__exit__ = MagicMock(return_value=False)
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(return_value=mock_resp))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(return_value=mock_resp))
 
         cmd_to_todoist(self._todoist_args(due="tomorrow"))
         out = capsys.readouterr().out
@@ -1480,8 +1521,7 @@ class TestTodoistMissingLines:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         self._setup_todoist(monkeypatch)
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(side_effect=ssl.SSLError("cert error")))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(side_effect=ssl.SSLError("cert error")))
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args())
@@ -1491,8 +1531,9 @@ class TestTodoistMissingLines:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         self._setup_todoist(monkeypatch)
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(side_effect=urllib.error.URLError("no route")))
+        monkeypatch.setattr(
+            "mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(side_effect=urllib.error.URLError("no route"))
+        )
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args())
@@ -1502,8 +1543,7 @@ class TestTodoistMissingLines:
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
         self._setup_todoist(monkeypatch)
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(side_effect=TimeoutError()))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(side_effect=TimeoutError()))
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args())
@@ -1515,11 +1555,12 @@ class TestTodoistMissingLines:
         self._setup_todoist(monkeypatch)
         err = urllib.error.HTTPError(
             url="https://api.todoist.com/api/v1/tasks",
-            code=403, msg="Forbidden", hdrs=None,
+            code=403,
+            msg="Forbidden",
+            hdrs=None,
             fp=MagicMock(read=Mock(return_value=b"Forbidden")),
         )
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(side_effect=err))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(side_effect=err))
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args())
@@ -1528,8 +1569,7 @@ class TestTodoistMissingLines:
         """Empty/invalid token string dies (line 37)."""
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.get_config",
-                            lambda: {"todoist_api_token": ""})
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.get_config", lambda: {"todoist_api_token": ""})
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args())
@@ -1538,8 +1578,7 @@ class TestTodoistMissingLines:
         """Non-string token dies (line 37)."""
         from mxctl.commands.mail.todoist_integration import cmd_to_todoist
 
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.get_config",
-                            lambda: {"todoist_api_token": 12345})
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.get_config", lambda: {"todoist_api_token": 12345})
 
         with pytest.raises(SystemExit):
             cmd_to_todoist(self._todoist_args())
@@ -1552,9 +1591,7 @@ class TestTodoistMissingLines:
 
         # First call: GET projects (paginated format)
         projects_resp = MagicMock()
-        projects_resp.read.return_value = json.dumps(
-            {"results": [{"id": "proj_1", "name": "Work"}], "next_cursor": None}
-        ).encode("utf-8")
+        projects_resp.read.return_value = json.dumps({"results": [{"id": "proj_1", "name": "Work"}], "next_cursor": None}).encode("utf-8")
         projects_resp.__enter__ = lambda s: s
         projects_resp.__exit__ = MagicMock(return_value=False)
 
@@ -1564,9 +1601,66 @@ class TestTodoistMissingLines:
         task_resp.__enter__ = lambda s: s
         task_resp.__exit__ = MagicMock(return_value=False)
 
-        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen",
-                            Mock(side_effect=[projects_resp, task_resp]))
+        monkeypatch.setattr("mxctl.commands.mail.todoist_integration.urllib.request.urlopen", Mock(side_effect=[projects_resp, task_resp]))
 
         cmd_to_todoist(self._todoist_args(project="Work"))
         out = capsys.readouterr().out
         assert "Subject" in out
+
+
+# ---------------------------------------------------------------------------
+# api.py — import coverage
+# ---------------------------------------------------------------------------
+
+
+class TestApiImports:
+    """Verify all api.py exports are importable."""
+
+    def test_api_all_exports(self):
+        """Every name in __all__ is importable and callable."""
+        import mxctl.api as api
+
+        assert hasattr(api, "__all__")
+        assert len(api.__all__) >= 50
+        for name in api.__all__:
+            obj = getattr(api, name)
+            assert callable(obj), f"{name} is not callable"
+
+
+# ---------------------------------------------------------------------------
+# analytics.py — stats --all empty mailboxes branch (lines 293-295)
+# ---------------------------------------------------------------------------
+
+
+class TestStatsAllEmptyMailboxes:
+    def test_stats_all_no_mailboxes(self, monkeypatch, capsys):
+        """stats --all with empty result hits the 'no mailboxes' branch."""
+        from mxctl.commands.mail.analytics import cmd_stats
+
+        monkeypatch.setattr("mxctl.commands.mail.analytics.resolve_account", lambda _: "iCloud")
+        monkeypatch.setattr("mxctl.commands.mail.analytics.run", Mock(return_value=""))
+
+        args = _args(account=None, all=True, mailbox=None)
+        cmd_stats(args)
+
+        out = capsys.readouterr().out
+        assert "No mailboxes found" in out
+
+
+# ---------------------------------------------------------------------------
+# system.py — get_headers() data function (lines 42-54)
+# ---------------------------------------------------------------------------
+
+
+class TestGetHeadersDataFunction:
+    def test_get_headers_returns_parsed_dict(self, monkeypatch):
+        """get_headers() calls AppleScript and returns parsed header dict."""
+        from mxctl.commands.mail.system import get_headers
+
+        raw = "From: sender@example.com\nTo: recipient@example.com\nSubject: Test\n"
+        monkeypatch.setattr("mxctl.commands.mail.system.run", Mock(return_value=raw))
+
+        result = get_headers("iCloud", "INBOX", 123)
+        assert isinstance(result, dict)
+        assert result.get("From") == "sender@example.com"
+        assert result.get("Subject") == "Test"

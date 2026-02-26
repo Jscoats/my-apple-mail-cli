@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Public Python API** — new `mxctl.api` module with 56 importable functions for programmatic access to Apple Mail. All command internals refactored to separate data retrieval from CLI presentation. External projects can now `from mxctl.api import get_messages, read_message` without any CLI or argparse dependency.
+
 ## [0.4.0] - 2026-02-25
 
 ### Added

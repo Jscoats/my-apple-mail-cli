@@ -7,6 +7,7 @@ from unittest.mock import Mock
 # cmd_count (accounts.py)
 # ---------------------------------------------------------------------------
 
+
 def test_count_all_accounts(monkeypatch, mock_args, capsys):
     """count with no -a flag returns total unread across all accounts."""
     from mxctl.commands.mail.accounts import cmd_count

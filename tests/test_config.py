@@ -35,9 +35,7 @@ class TestResolveAccount:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         monkeypatch.setattr("mxctl.config.CONFIG_DIR", str(config_dir))
-        monkeypatch.setattr(
-            "mxctl.config.CONFIG_FILE", str(config_dir / "config.json")
-        )
+        monkeypatch.setattr("mxctl.config.CONFIG_FILE", str(config_dir / "config.json"))
         monkeypatch.setattr("mxctl.config.STATE_FILE", str(config_dir / "state.json"))
 
         result = resolve_account("ExplicitAccount")
@@ -53,16 +51,12 @@ class TestResolveAccount:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         monkeypatch.setattr("mxctl.config.CONFIG_DIR", str(config_dir))
-        monkeypatch.setattr(
-            "mxctl.config.CONFIG_FILE", str(config_dir / "config.json")
-        )
+        monkeypatch.setattr("mxctl.config.CONFIG_FILE", str(config_dir / "config.json"))
         monkeypatch.setattr("mxctl.config.STATE_FILE", str(config_dir / "state.json"))
 
         # Set config default (namespaced under "mail")
         config_file = config_dir / "config.json"
-        config_file.write_text(
-            json.dumps({"mail": {"default_account": "ConfigDefault"}})
-        )
+        config_file.write_text(json.dumps({"mail": {"default_account": "ConfigDefault"}}))
 
         result = resolve_account(None)
         assert result == "ConfigDefault"
@@ -71,9 +65,7 @@ class TestResolveAccount:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         monkeypatch.setattr("mxctl.config.CONFIG_DIR", str(config_dir))
-        monkeypatch.setattr(
-            "mxctl.config.CONFIG_FILE", str(config_dir / "config.json")
-        )
+        monkeypatch.setattr("mxctl.config.CONFIG_FILE", str(config_dir / "config.json"))
         monkeypatch.setattr("mxctl.config.STATE_FILE", str(config_dir / "state.json"))
 
         # Set state last-used (namespaced under "mail")
@@ -87,9 +79,7 @@ class TestResolveAccount:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         monkeypatch.setattr("mxctl.config.CONFIG_DIR", str(config_dir))
-        monkeypatch.setattr(
-            "mxctl.config.CONFIG_FILE", str(config_dir / "config.json")
-        )
+        monkeypatch.setattr("mxctl.config.CONFIG_FILE", str(config_dir / "config.json"))
         monkeypatch.setattr("mxctl.config.STATE_FILE", str(config_dir / "state.json"))
 
         result = resolve_account(None)
@@ -99,6 +89,7 @@ class TestResolveAccount:
 # ===========================================================================
 # _migrate_legacy_config
 # ===========================================================================
+
 
 class TestMigrateLegacyConfig:
     """Test legacy config migration from ~/.config/my/ to ~/.config/mxctl/."""
@@ -174,6 +165,7 @@ class TestMigrateLegacyConfig:
 
         # Remove the new dir so we can tell if second call runs
         import shutil
+
         shutil.rmtree(str(new_dir))
 
         cfg_mod._migrate_legacy_config()
@@ -184,6 +176,7 @@ class TestMigrateLegacyConfig:
 # ===========================================================================
 # file_lock retry and timeout
 # ===========================================================================
+
 
 class TestFileLock:
     """Test file_lock retry/timeout paths."""
@@ -263,6 +256,7 @@ class TestFileLock:
 # ===========================================================================
 # _load_json IOError and edge cases
 # ===========================================================================
+
 
 class TestLoadJson:
     """Test _load_json error handling."""
@@ -355,6 +349,7 @@ class TestLoadJson:
 # get_config: migration trigger, required=True, warn paths
 # ===========================================================================
 
+
 class TestGetConfig:
     """Test get_config edge cases."""
 
@@ -425,6 +420,7 @@ class TestGetConfig:
 # save_message_aliases + resolve_alias
 # ===========================================================================
 
+
 class TestMessageAliases:
     """Test save_message_aliases and resolve_alias."""
 
@@ -461,11 +457,13 @@ class TestMessageAliases:
     def test_resolve_alias_non_numeric(self):
         """Non-numeric value returns None."""
         from mxctl.config import resolve_alias
+
         assert resolve_alias("abc") is None
         assert resolve_alias(None) is None
 
     def test_resolve_alias_zero_or_negative(self):
         """Zero or negative returns None."""
         from mxctl.config import resolve_alias
+
         assert resolve_alias(0) is None
         assert resolve_alias(-1) is None

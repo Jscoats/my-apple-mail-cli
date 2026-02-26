@@ -25,11 +25,8 @@ from mxctl.util.mail_helpers import extract_email, parse_message_line
 # ---------------------------------------------------------------------------
 
 
-def cmd_top_senders(args) -> None:
-    """Show most frequent email senders over a time period."""
-    days = getattr(args, "days", 30)
-    limit = getattr(args, "limit", DEFAULT_TOP_SENDERS_LIMIT)
-
+def get_top_senders(days: int = 30, limit: int = DEFAULT_TOP_SENDERS_LIMIT) -> list[dict]:
+    """Fetch and rank most frequent senders over the given number of days."""
     since_dt = datetime.now() - timedelta(days=days)
     since_as = to_applescript_date(since_dt)
 
@@ -61,16 +58,28 @@ def cmd_top_senders(args) -> None:
 
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
-        format_output(args, f"No messages found in the last {days} days.", json_data={"days": days, "senders": []})
-        return
+        return []
 
     counter = Counter(line.strip() for line in result.strip().split("\n") if line.strip())
     top = counter.most_common(limit)
+    return [{"sender": s, "count": c} for s, c in top]
+
+
+def cmd_top_senders(args) -> None:
+    """Show most frequent email senders over a time period."""
+    days = getattr(args, "days", 30)
+    limit = getattr(args, "limit", DEFAULT_TOP_SENDERS_LIMIT)
+
+    top = get_top_senders(days=days, limit=limit)
+
+    if not top:
+        format_output(args, f"No messages found in the last {days} days.", json_data={"days": days, "senders": []})
+        return
 
     text = f"Top {limit} senders (last {days} days):"
-    for i, (sender, count) in enumerate(top, 1):
-        text += f"\n  {i}. {truncate(sender, 50)} — {count} messages"
-    format_output(args, text, json_data=[{"sender": s, "count": c} for s, c in top])
+    for i, entry in enumerate(top, 1):
+        text += f"\n  {i}. {truncate(entry['sender'], 50)} — {entry['count']} messages"
+    format_output(args, text, json_data=top)
 
 
 # ---------------------------------------------------------------------------
@@ -78,8 +87,8 @@ def cmd_top_senders(args) -> None:
 # ---------------------------------------------------------------------------
 
 
-def cmd_digest(args) -> None:
-    """Show unread messages grouped by sender domain."""
+def get_digest() -> dict:
+    """Fetch unread messages and group them by sender domain."""
     script = f"""
     tell application "Mail"
         set output to ""
@@ -108,24 +117,33 @@ def cmd_digest(args) -> None:
 
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
-        format_output(args, "No unread messages. Inbox zero!")
-        return
+        return {}
 
     # Group by sender domain
-    groups = defaultdict(list)
+    groups: dict = defaultdict(list)
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
         msg = parse_message_line(line, ["account", "id", "subject", "sender", "date"], FIELD_SEPARATOR)
         if msg is None:
             continue
-        # Extract domain from sender
         email = extract_email(msg["sender"])
         if "@" in email:
             domain = email.split("@")[1].lower()
         else:
             domain = "other"
         groups[domain].append(msg)
+
+    return dict(groups)
+
+
+def cmd_digest(args) -> None:
+    """Show unread messages grouped by sender domain."""
+    groups = get_digest()
+
+    if not groups:
+        format_output(args, "No unread messages. Inbox zero!")
+        return
 
     # Collect all messages into a flat list for sequential aliases
     all_messages = []
@@ -144,7 +162,7 @@ def cmd_digest(args) -> None:
             text += f"\n      From: {truncate(m['sender'], 40)}"
         if len(msgs) > 5:
             text += f"\n    ... and {len(msgs) - 5} more"
-    format_output(args, text, json_data=dict(groups))
+    format_output(args, text, json_data=groups)
 
 
 # ---------------------------------------------------------------------------
@@ -152,19 +170,20 @@ def cmd_digest(args) -> None:
 # ---------------------------------------------------------------------------
 
 
-def cmd_stats(args) -> None:
-    """Show message count and unread count for a mailbox, or account-wide stats with --all."""
-    show_all = getattr(args, "all", False)
-    # For --all, we need to know if the user *explicitly* passed -a, not just the resolved default.
-    # resolve_account() falls back to the configured default (e.g. iCloud), which would cause
-    # --all without -a to incorrectly use the single-account branch.
-    explicit_account = getattr(args, "account", None)
-    account = resolve_account(explicit_account)
+def get_stats(
+    show_all: bool = False,
+    account: str | None = None,
+    explicit_account: str | None = None,
+    mailbox: str = DEFAULT_MAILBOX,
+) -> dict:
+    """Fetch mailbox or account-wide stats.
 
+    Returns a dict with keys depending on mode:
+    - Single mailbox: {"mailbox", "account", "total", "unread"}
+    - All mailboxes: {"scope", "total_messages", "total_unread", "mailboxes"}
+    """
     if show_all:
-        # Only use the account branch when the user explicitly specified -a.
         if explicit_account:
-            # --all -a ACCOUNT: stats for every mailbox in one account
             acct_escaped = escape(account)
             script = f"""
             tell application "Mail"
@@ -185,7 +204,6 @@ def cmd_stats(args) -> None:
             end tell
             """
         else:
-            # --all (no -a): stats for every mailbox across ALL accounts
             script = f"""
             tell application "Mail"
                 set output to ""
@@ -211,16 +229,12 @@ def cmd_stats(args) -> None:
         result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
         lines = result.strip().split("\n")
         if not lines:  # pragma: no cover — str.split() always returns at least [""]
-            scope = f"account '{account}'" if explicit_account else "any account"
-            format_output(args, f"No mailboxes found in {scope}.", json_data={"mailboxes": []})
-            return
+            return {"scope": account if explicit_account else "all", "total_messages": 0, "total_unread": 0, "mailboxes": []}
 
-        # First line has grand totals
         totals_parts = lines[0].split(FIELD_SEPARATOR)
         grand_total = int(totals_parts[0]) if len(totals_parts) >= 1 and totals_parts[0].isdigit() else 0
         grand_unread = int(totals_parts[1]) if len(totals_parts) >= 2 and totals_parts[1].isdigit() else 0
 
-        # Subsequent lines: acctName|mbName|total|unread
         mailboxes = []
         for line in lines[1:]:
             if not line.strip():
@@ -236,30 +250,13 @@ def cmd_stats(args) -> None:
                     }
                 )
 
-        # Build text output — use explicit_account so resolved defaults don't bleed in.
-        scope_label = f"Account: {account}" if explicit_account else "All Accounts"
-        text = f"{scope_label}\n"
-        text += f"Total: {grand_total} messages, {grand_unread} unread\n"
-        text += f"\nMailboxes ({len(mailboxes)}):"
-        for mb in mailboxes:
-            acct_prefix = "" if explicit_account else f"[{mb['account']}] "
-            text += f"\n  {acct_prefix}{mb['name']}: {mb['total']} messages, {mb['unread']} unread"
-
-        format_output(
-            args,
-            text,
-            json_data={
-                "scope": account if explicit_account else "all",
-                "total_messages": grand_total,
-                "total_unread": grand_unread,
-                "mailboxes": mailboxes,
-            },
-        )
+        return {
+            "scope": account if explicit_account else "all",
+            "total_messages": grand_total,
+            "total_unread": grand_unread,
+            "mailboxes": mailboxes,
+        }
     else:
-        # Single mailbox stats (existing behavior)
-        if not account:
-            die("Account required. Use -a ACCOUNT.")
-        mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
         acct_escaped = escape(account)
         mb_escaped = escape(mailbox)
 
@@ -276,11 +273,47 @@ def cmd_stats(args) -> None:
         parts = result.split(FIELD_SEPARATOR)
         total = int(parts[0]) if len(parts) >= 1 and parts[0].isdigit() else 0
         unread = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 0
+        return {"mailbox": mailbox, "account": account, "total": total, "unread": unread}
 
+
+def cmd_stats(args) -> None:
+    """Show message count and unread count for a mailbox, or account-wide stats with --all."""
+    show_all = getattr(args, "all", False)
+    # For --all, we need to know if the user *explicitly* passed -a, not just the resolved default.
+    # resolve_account() falls back to the configured default (e.g. iCloud), which would cause
+    # --all without -a to incorrectly use the single-account branch.
+    explicit_account = getattr(args, "account", None)
+    account = resolve_account(explicit_account)
+
+    if show_all:
+        data = get_stats(show_all=True, account=account, explicit_account=explicit_account)
+        mailboxes = data["mailboxes"]
+
+        if not mailboxes:
+            scope = f"account '{account}'" if explicit_account else "any account"
+            format_output(args, f"No mailboxes found in {scope}.", json_data={"mailboxes": []})
+            return
+
+        scope_label = f"Account: {account}" if explicit_account else "All Accounts"
+        text = f"{scope_label}\n"
+        text += f"Total: {data['total_messages']} messages, {data['total_unread']} unread\n"
+        text += f"\nMailboxes ({len(mailboxes)}):"
+        for mb in mailboxes:
+            acct_prefix = "" if explicit_account else f"[{mb['account']}] "
+            text += f"\n  {acct_prefix}{mb['name']}: {mb['total']} messages, {mb['unread']} unread"
+
+        format_output(args, text, json_data=data)
+    else:
+        # Single mailbox stats (existing behavior)
+        if not account:
+            die("Account required. Use -a ACCOUNT.")
+        mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
+
+        data = get_stats(show_all=False, account=account, mailbox=mailbox)
         format_output(
             args,
-            f"{mailbox} [{account}]: {total} messages, {unread} unread",
-            json_data={"mailbox": mailbox, "account": account, "total": total, "unread": unread},
+            f"{mailbox} [{account}]: {data['total']} messages, {data['unread']} unread",
+            json_data=data,
         )
 
 
@@ -289,13 +322,9 @@ def cmd_stats(args) -> None:
 # ---------------------------------------------------------------------------
 
 
-def cmd_show_flagged(args) -> None:
-    """List all flagged messages."""
-    account = resolve_account(getattr(args, "account", None))
-    limit = validate_limit(getattr(args, "limit", DEFAULT_MESSAGE_LIMIT))
-
+def get_flagged_messages(account: str | None = None, limit: int = DEFAULT_MESSAGE_LIMIT) -> list[dict]:
+    """Fetch all flagged messages, optionally filtered by account."""
     if account:
-        # Search in specific account only
         acct_escaped = escape(account)
         script = f"""
         tell application "Mail"
@@ -316,7 +345,6 @@ def cmd_show_flagged(args) -> None:
         end tell
         """
     else:
-        # Search across all accounts
         script = f"""
         tell application "Mail"
             set output to ""
@@ -340,13 +368,9 @@ def cmd_show_flagged(args) -> None:
         """
 
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
-
     if not result.strip():
-        scope = f" in account '{account}'" if account else " across all accounts"
-        format_output(args, f"No flagged messages found{scope}.", json_data={"flagged_messages": []})
-        return
+        return []
 
-    # Build JSON data
     messages = []
     for line in result.strip().split("\n"):
         if not line.strip():
@@ -354,12 +378,25 @@ def cmd_show_flagged(args) -> None:
         msg = parse_message_line(line, ["id", "subject", "sender", "date", "mailbox", "account"], FIELD_SEPARATOR)
         if msg is not None:
             messages.append(msg)
+    return messages
+
+
+def cmd_show_flagged(args) -> None:
+    """List all flagged messages."""
+    account = resolve_account(getattr(args, "account", None))
+    limit = validate_limit(getattr(args, "limit", DEFAULT_MESSAGE_LIMIT))
+
+    messages = get_flagged_messages(account=account, limit=limit)
+
+    if not messages:
+        scope = f" in account '{account}'" if account else " across all accounts"
+        format_output(args, f"No flagged messages found{scope}.", json_data={"flagged_messages": []})
+        return
 
     save_message_aliases([m["id"] for m in messages])
     for i, m in enumerate(messages, 1):
         m["alias"] = i
 
-    # Build text output
     scope = f" in account '{account}'" if account else " across all accounts"
     text = f"Flagged messages{scope} (showing up to {limit}):"
     for m in messages:

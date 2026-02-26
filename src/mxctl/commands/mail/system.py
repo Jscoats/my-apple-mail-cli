@@ -13,8 +13,9 @@ from mxctl.util.mail_helpers import parse_email_headers
 # check — trigger mail fetch
 # ---------------------------------------------------------------------------
 
-def cmd_check(args) -> None:
-    """Trigger Mail.app to check for new mail."""
+
+def check_mail_status() -> dict:
+    """Trigger Mail.app to check for new mail. Returns status dict."""
     script = """
     tell application "Mail"
         check for new mail
@@ -22,21 +23,22 @@ def cmd_check(args) -> None:
     end tell
     """
     run(script)
-    format_output(args, "Mail check triggered.", json_data={"status": "checked"})
+    return {"status": "checked"}
+
+
+def cmd_check(args) -> None:
+    """Trigger Mail.app to check for new mail."""
+    data = check_mail_status()
+    format_output(args, "Mail check triggered.", json_data=data)
 
 
 # ---------------------------------------------------------------------------
 # headers
 # ---------------------------------------------------------------------------
 
-def cmd_headers(args) -> None:
-    """Show email headers with authentication details."""
-    account = resolve_account(getattr(args, "account", None))
-    if not account:
-        die("Account required. Use -a ACCOUNT.")
-    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = validate_msg_id(args.id)
 
+def get_headers(account: str, mailbox: str, message_id: int) -> dict:
+    """Return parsed email headers dict for the given message."""
     acct_escaped = escape(account)
     mb_escaped = escape(mailbox)
 
@@ -49,7 +51,34 @@ def cmd_headers(args) -> None:
     """
 
     result = run(script)
+    return parse_email_headers(result)
+
+
+def get_raw_headers(account: str, mailbox: str, message_id: int) -> str:
+    """Return raw header string for the given message."""
+    acct_escaped = escape(account)
+    mb_escaped = escape(mailbox)
+
+    script = f"""
+    tell application "Mail"
+        set mb to mailbox "{mb_escaped}" of account "{acct_escaped}"
+        set theMsg to first message of mb whose id is {message_id}
+        return all headers of theMsg
+    end tell
+    """
+    return run(script)
+
+
+def cmd_headers(args) -> None:
+    """Show email headers with authentication details."""
+    account = resolve_account(getattr(args, "account", None))
+    if not account:
+        die("Account required. Use -a ACCOUNT.")
+    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
+    message_id = validate_msg_id(args.id)
     raw = getattr(args, "raw", False)
+
+    result = get_raw_headers(account, mailbox, message_id)
 
     if raw:
         print(result)
@@ -117,19 +146,9 @@ def cmd_headers(args) -> None:
 # rules — list/enable/disable/apply mail rules
 # ---------------------------------------------------------------------------
 
-def cmd_rules(args) -> None:
-    """List or manage mail rules."""
-    action = getattr(args, "action", None)
-    rule_name = getattr(args, "rule_name", None)
-    if action == "enable" and rule_name:
-        _toggle_rule(args, rule_name, True)
-    elif action == "disable" and rule_name:
-        _toggle_rule(args, rule_name, False)
-    else:
-        _list_rules(args)
 
-
-def _list_rules(args) -> None:
+def get_rules() -> list[dict]:
+    """Return list of mail rules with name and enabled status."""
     script = f"""
     tell application "Mail"
         set output to ""
@@ -143,8 +162,7 @@ def _list_rules(args) -> None:
     """
     result = run(script)
     if not result.strip():
-        format_output(args, "No mail rules found.")
-        return
+        return []
 
     rules = []
     for line in result.strip().split("\n"):
@@ -153,15 +171,11 @@ def _list_rules(args) -> None:
         parts = line.split(FIELD_SEPARATOR)
         if len(parts) >= 2:
             rules.append({"name": parts[0], "enabled": parts[1].lower() == "true"})
-
-    text = "Mail Rules:"
-    for rule in rules:
-        status = "ON" if rule["enabled"] else "OFF"
-        text += f"\n  [{status}] {rule['name']}"
-    format_output(args, text, json_data=rules)
+    return rules
 
 
-def _toggle_rule(args, name: str, enabled: bool) -> None:
+def toggle_rule(name: str, enabled: bool) -> dict:
+    """Enable or disable a mail rule by name. Returns result dict."""
     name_escaped = escape(name)
     val = "true" if enabled else "false"
     script = f"""
@@ -173,12 +187,44 @@ def _toggle_rule(args, name: str, enabled: bool) -> None:
     """
     result = run(script)
     word = "enabled" if enabled else "disabled"
-    format_output(args, f"Rule '{result}' {word}.", json_data={"rule": result, "status": word})
+    return {"rule": result, "status": word}
+
+
+def cmd_rules(args) -> None:
+    """List or manage mail rules."""
+    action = getattr(args, "action", None)
+    rule_name = getattr(args, "rule_name", None)
+    if action == "enable" and rule_name:
+        _toggle_rule(args, rule_name, True)
+    elif action == "disable" and rule_name:
+        _toggle_rule(args, rule_name, False)
+    else:
+        _list_rules(args)
+
+
+def _list_rules(args) -> None:
+    rules = get_rules()
+    if not rules:
+        format_output(args, "No mail rules found.")
+        return
+
+    text = "Mail Rules:"
+    for rule in rules:
+        status = "ON" if rule["enabled"] else "OFF"
+        text += f"\n  [{status}] {rule['name']}"
+    format_output(args, text, json_data=rules)
+
+
+def _toggle_rule(args, name: str, enabled: bool) -> None:
+    data = toggle_rule(name, enabled)
+    word = data["status"]
+    format_output(args, f"Rule '{data['rule']}' {word}.", json_data=data)
 
 
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+
 
 def register(subparsers) -> None:
     """Register system mail subcommands."""
@@ -199,4 +245,3 @@ def register(subparsers) -> None:
     p.add_argument("rule_name", nargs="?", help="Rule name")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_rules)
-

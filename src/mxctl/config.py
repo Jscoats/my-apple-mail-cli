@@ -47,13 +47,21 @@ APPLESCRIPT_TIMEOUT_LONG = 60
 APPLESCRIPT_TIMEOUT_BATCH = 120
 
 # Data separators for AppleScript field/record parsing
-FIELD_SEPARATOR = "\x1F"
+FIELD_SEPARATOR = "\x1f"
 RECORD_SEPARATOR = "\x1eEND\x1e"
 
 # Common patterns for identifying no-reply / automated senders
 NOREPLY_PATTERNS = [
-    "noreply", "no-reply", "notifications", "mailer-daemon", "donotreply",
-    "updates@", "news@", "info@", "support@", "billing@",
+    "noreply",
+    "no-reply",
+    "notifications",
+    "mailer-daemon",
+    "donotreply",
+    "updates@",
+    "news@",
+    "info@",
+    "support@",
+    "billing@",
 ]
 
 _migrated: bool = False
@@ -72,6 +80,7 @@ def _migrate_legacy_config() -> None:
         return  # No legacy config to migrate
 
     import sys
+
     shutil.copytree(_LEGACY_CONFIG_DIR, CONFIG_DIR)
     print(
         f"Migrated config from {_LEGACY_CONFIG_DIR} to {CONFIG_DIR}",
@@ -123,6 +132,7 @@ def _load_json(path: str) -> dict:
                 return json.loads(content)
         except json.JSONDecodeError:
             import sys
+
             print(f"Warning: {path} contains invalid JSON. Using defaults.", file=sys.stderr)
             return {}
         except OSError:
@@ -154,6 +164,7 @@ def get_config(required: bool = False, warn: bool = True) -> dict:
             die("No config found. Run `mxctl init` to set up your default account.")
         if warn and not _config_warned:
             import sys
+
             print(
                 "No config found. Run `mxctl init` to set up your default account.",
                 file=sys.stderr,
@@ -169,9 +180,7 @@ def get_state() -> dict:
 def save_message_aliases(aliases: list[int]) -> None:
     """Save ordered list of message IDs as session aliases to state."""
     state = get_state()
-    state.setdefault("mail", {})["aliases"] = {
-        str(i + 1): mid for i, mid in enumerate(aliases)
-    }
+    state.setdefault("mail", {})["aliases"] = {str(i + 1): mid for i, mid in enumerate(aliases)}
     _save_json(STATE_FILE, state)
 
 

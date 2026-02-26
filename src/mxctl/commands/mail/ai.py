@@ -22,15 +22,15 @@ from mxctl.util.mail_helpers import extract_display_name, extract_email, normali
 # summary — ultra-concise one-liner per unread
 # ---------------------------------------------------------------------------
 
-def cmd_summary(args) -> None:
-    """Generate an ultra-concise one-liner per unread message."""
+
+def get_summary() -> list[dict]:
+    """Fetch unread messages across all accounts for summary."""
     inner_ops = f'set output to output & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & linefeed'
     script = inbox_iterator_all_accounts(inner_ops, cap=20)
 
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
-        format_output(args, "No unread messages.")
-        return
+        return []
 
     messages = []
     for line in result.strip().split("\n"):
@@ -39,6 +39,15 @@ def cmd_summary(args) -> None:
         msg = parse_message_line(line, ["account", "id", "subject", "sender", "date"], FIELD_SEPARATOR)
         if msg is not None:
             messages.append(msg)
+    return messages
+
+
+def cmd_summary(args) -> None:
+    """Generate an ultra-concise one-liner per unread message."""
+    messages = get_summary()
+    if not messages:
+        format_output(args, "No unread messages.")
+        return
 
     save_message_aliases([m["id"] for m in messages])
     for i, m in enumerate(messages, 1):
@@ -56,16 +65,15 @@ def cmd_summary(args) -> None:
 # triage — unread grouped by urgency/category
 # ---------------------------------------------------------------------------
 
-def cmd_triage(args) -> None:
-    """Group unread messages by urgency and category."""
-    account = resolve_account(getattr(args, "account", None))
+
+def get_triage(account: str | None = None) -> dict:
+    """Fetch and categorize unread messages into flagged, people, and notifications."""
     inner_ops = f'set output to output & acctName & "{FIELD_SEPARATOR}" & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & linefeed'
     script = inbox_iterator_all_accounts(inner_ops, cap=30, account=account)
 
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
-        format_output(args, "No unread messages. Inbox zero!")
-        return
+        return {"flagged": [], "people": [], "notifications": []}
 
     flagged = []
     people = []
@@ -85,6 +93,22 @@ def cmd_triage(args) -> None:
             notifications.append(msg)
         else:
             people.append(msg)
+
+    return {"flagged": flagged, "people": people, "notifications": notifications}
+
+
+def cmd_triage(args) -> None:
+    """Group unread messages by urgency and category."""
+    account = resolve_account(getattr(args, "account", None))
+    data = get_triage(account=account)
+
+    flagged = data["flagged"]
+    people = data["people"]
+    notifications = data["notifications"]
+
+    if not flagged and not people and not notifications:
+        format_output(args, "No unread messages. Inbox zero!")
+        return
 
     # Assign sequential aliases across all categories
     all_messages = flagged + people + notifications
@@ -120,16 +144,15 @@ def cmd_triage(args) -> None:
 # context — message + full thread history
 # ---------------------------------------------------------------------------
 
-def cmd_context(args) -> None:
-    """Show a message with full thread history."""
-    account = resolve_account(getattr(args, "account", None))
-    if not account:
-        die("Account required. Use -a ACCOUNT.")
-    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = validate_msg_id(args.id)
-    limit = max(1, min(getattr(args, "limit", 50), MAX_MESSAGES_BATCH))
-    all_accounts = getattr(args, "all_accounts", False)
 
+def get_context(
+    account: str,
+    mailbox: str,
+    message_id: int,
+    limit: int = 50,
+    all_accounts: bool = False,
+) -> dict:
+    """Fetch a message and its full thread history."""
     acct_escaped = escape(account)
     mb_escaped = escape(mailbox)
 
@@ -165,11 +188,11 @@ def cmd_context(args) -> None:
 
     # Search for thread messages (current account or all accounts based on flag)
     if all_accounts:
-        acct_loop = 'repeat with acct in (every account)\nset acctName to name of acct'
-        acct_loop_end = 'end repeat'
+        acct_loop = "repeat with acct in (every account)\nset acctName to name of acct"
+        acct_loop_end = "end repeat"
     else:
         acct_loop = f'set acct to account "{acct_escaped}"\nset acctName to name of acct'
-        acct_loop_end = ''
+        acct_loop_end = ""
 
     thread_script = f"""
     tell application "Mail"
@@ -205,15 +228,17 @@ def cmd_context(args) -> None:
                 continue
             p = entry.split(FIELD_SEPARATOR)
             if len(p) >= 5:
-                thread_entries.append({
-                    "id": int(p[0]) if p[0].isdigit() else p[0],
-                    "subject": p[1],
-                    "from": p[2],
-                    "date": p[3],
-                    "body": FIELD_SEPARATOR.join(p[4:]),
-                })
+                thread_entries.append(
+                    {
+                        "id": int(p[0]) if p[0].isdigit() else p[0],
+                        "subject": p[1],
+                        "from": p[2],
+                        "date": p[3],
+                        "body": FIELD_SEPARATOR.join(p[4:]),
+                    }
+                )
 
-    data = {
+    return {
         "message": {
             "id": message_id,
             "subject": subject,
@@ -225,7 +250,34 @@ def cmd_context(args) -> None:
         "thread": thread_entries,
     }
 
-    text = f"=== Message ===\nFrom: {sender}\nTo: {to_list.rstrip(', ')}\nDate: {date}\nSubject: {subject}\n\n{content}"
+
+def cmd_context(args) -> None:
+    """Show a message with full thread history."""
+    account = resolve_account(getattr(args, "account", None))
+    if not account:
+        die("Account required. Use -a ACCOUNT.")
+    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
+    message_id = validate_msg_id(args.id)
+    limit = max(1, min(getattr(args, "limit", 50), MAX_MESSAGES_BATCH))
+    all_accounts = getattr(args, "all_accounts", False)
+
+    data = get_context(
+        account=account,
+        mailbox=mailbox,
+        message_id=message_id,
+        limit=limit,
+        all_accounts=all_accounts,
+    )
+
+    msg = data["message"]
+    thread_entries = data["thread"]
+    subject = msg["subject"]
+    sender = msg["from"]
+    to_list = msg["to"]
+    date = msg["date"]
+    content = msg["body"]
+
+    text = f"=== Message ===\nFrom: {sender}\nTo: {to_list}\nDate: {date}\nSubject: {subject}\n\n{content}"
     if thread_entries:
         text += "\n\n=== Thread History ==="
         for t in thread_entries:
@@ -238,10 +290,9 @@ def cmd_context(args) -> None:
 # find-related — search + group by conversation
 # ---------------------------------------------------------------------------
 
-def cmd_find_related(args) -> None:
-    """Search for messages and group results by conversation."""
-    query = args.query
 
+def find_related(query: str) -> dict:
+    """Search for messages matching query and group by conversation thread."""
     # If query is a numeric message ID, look up the message first
     if query.isdigit():
         message_id = int(query)
@@ -260,8 +311,7 @@ def cmd_find_related(args) -> None:
         """
         lookup_result = run(lookup_script, timeout=APPLESCRIPT_TIMEOUT_LONG)
         if not lookup_result.strip():
-            format_output(args, f"Message {message_id} not found.")
-            return
+            return {}
         parts = lookup_result.strip().split(FIELD_SEPARATOR)
         query = normalize_subject(parts[0])
 
@@ -291,20 +341,36 @@ def cmd_find_related(args) -> None:
 
     result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
     if not result.strip():
-        format_output(args, f"No messages found matching '{query}'.")
-        return
+        return {}
 
     # Group by normalized subject (thread)
-    threads = defaultdict(list)
+    threads: dict = defaultdict(list)
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
         msg = parse_message_line(line, ["id", "subject", "sender", "date", "mailbox", "account"], FIELD_SEPARATOR)
         if msg is None:
             continue
-        # Normalize subject for grouping
         normalized = normalize_subject(msg["subject"]).lower()
         threads[normalized].append(msg)
+
+    return dict(threads)
+
+
+def cmd_find_related(args) -> None:
+    """Search for messages and group results by conversation."""
+    query = args.query
+    threads = find_related(query)
+
+    # Resolve effective query for display (may have been normalized from ID lookup)
+    # Re-derive display query: if original was digit and threads is empty, it wasn't found
+    if query.isdigit() and not threads:
+        format_output(args, f"Message {query} not found.")
+        return
+
+    if not threads:
+        format_output(args, f"No messages found matching '{query}'.")
+        return
 
     # Assign sequential aliases across all threads
     all_msgs_flat = []
@@ -314,7 +380,9 @@ def cmd_find_related(args) -> None:
     for i, m in enumerate(all_msgs_flat, 1):
         m["alias"] = i
 
-    text = f"Related messages for '{query}' ({len(threads)} conversations):"
+    # Use the resolved query for display (first thread key is closest to it)
+    display_query = query if not query.isdigit() else next(iter(threads))
+    text = f"Related messages for '{display_query}' ({len(threads)} conversations):"
     for thread_subject, msgs in sorted(threads.items(), key=lambda x: -len(x[1])):
         text += f"\n\n  {thread_subject} ({len(msgs)} messages):"
         for m in msgs[:5]:
@@ -322,12 +390,13 @@ def cmd_find_related(args) -> None:
             text += f"\n    [{m['alias']}] {truncate(sender, 20)} — {m['date']}"
         if len(msgs) > 5:
             text += f"\n    ... and {len(msgs) - 5} more"
-    format_output(args, text, json_data=dict(threads))
+    format_output(args, text, json_data=threads)
 
 
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+
 
 def register(subparsers) -> None:
     """Register AI-optimized mail subcommands."""

@@ -18,21 +18,25 @@ from mxctl.util.mail_helpers import resolve_message_context
 # to-todoist — create a Todoist task from an email
 # ---------------------------------------------------------------------------
 
-def cmd_to_todoist(args) -> None:
-    """Create a Todoist task from an email."""
-    account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
-    message_id = validate_msg_id(args.id)
-    project = getattr(args, "project", None)
-    priority = getattr(args, "priority", 1)
-    due = getattr(args, "due", None)
 
-    # Get Todoist API token from config
+def create_todoist_task(
+    account: str,
+    mailbox: str,
+    acct_escaped: str,
+    mb_escaped: str,
+    message_id: int,
+    project: str | None = None,
+    priority: int = 1,
+    due: str | None = None,
+) -> dict:
+    """Create a Todoist task from an email message. Returns the Todoist API response dict.
+
+    Has Mail.app side effects (reads email) and network side effects (creates Todoist task).
+    """
     cfg = get_config()
     token = cfg.get("todoist_api_token")
     if not token:
         die("Todoist API token not configured. Add 'todoist_api_token' to ~/.config/mxctl/config.json")
-    # Validate token format before making any network calls (prevents silent hangs
-    # caused by malformed auth headers or non-string token values)
     if not isinstance(token, str) or not token.strip():
         die("Todoist API token is invalid. Check 'todoist_api_token' in ~/.config/mxctl/config.json")
 
@@ -104,19 +108,12 @@ def cmd_to_todoist(args) -> None:
         url,
         data=json.dumps(task_data).encode("utf-8"),
         headers=headers,
-        method="POST"
+        method="POST",
     )
 
     try:
         with urllib.request.urlopen(req, context=ssl_context, timeout=APPLESCRIPT_TIMEOUT_SHORT) as response:
-            response_data = json.loads(response.read().decode("utf-8"))
-            task_url = response_data.get("url")
-
-            text = f"Created Todoist task: {subject}"
-            if task_url:
-                text += f"\nURL: {task_url}"
-
-            format_output(args, text, json_data=response_data)
+            return json.loads(response.read().decode("utf-8"))
     except (ssl.SSLError, ssl.CertificateError):
         die("SSL certificate error. Try running: /usr/bin/python3 /Applications/Python*/Install\\ Certificates.command")
     except urllib.error.HTTPError as e:
@@ -128,9 +125,39 @@ def cmd_to_todoist(args) -> None:
         die(f"Todoist API timed out creating task (>{APPLESCRIPT_TIMEOUT_SHORT}s). Check your network or try again.")
 
 
+def cmd_to_todoist(args) -> None:
+    """Create a Todoist task from an email."""
+    account, mailbox, acct_escaped, mb_escaped = resolve_message_context(args)
+    message_id = validate_msg_id(args.id)
+    project = getattr(args, "project", None)
+    priority = getattr(args, "priority", 1)
+    due = getattr(args, "due", None)
+
+    response_data = create_todoist_task(
+        account,
+        mailbox,
+        acct_escaped,
+        mb_escaped,
+        message_id,
+        project=project,
+        priority=priority,
+        due=due,
+    )
+
+    subject = response_data.get("content", "")
+    task_url = response_data.get("url")
+
+    text = f"Created Todoist task: {subject}"
+    if task_url:
+        text += f"\nURL: {task_url}"
+
+    format_output(args, text, json_data=response_data)
+
+
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+
 
 def register(subparsers) -> None:
     # to-todoist

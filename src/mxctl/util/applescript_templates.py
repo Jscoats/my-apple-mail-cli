@@ -32,14 +32,13 @@ def inbox_iterator_all_accounts(inner_operations: str, cap: int = 20, account: s
     """
     if account:
         from mxctl.util.applescript import escape
+
         acct_escaped = escape(account)
         outer_open = f'set acct to account "{acct_escaped}"\n        set acctName to name of acct'
         outer_close = ""
     else:
         outer_open = (
-            "repeat with acct in (every account)\n"
-            "            if enabled of acct then\n"
-            "                set acctName to name of acct"
+            "repeat with acct in (every account)\n            if enabled of acct then\n                set acctName to name of acct"
         )
         outer_close = "            end if\n        end repeat"
 
@@ -69,13 +68,7 @@ def inbox_iterator_all_accounts(inner_operations: str, cap: int = 20, account: s
     """
 
 
-def set_message_property(
-    account_var: str,
-    mailbox_var: str,
-    message_id: int,
-    property_name: str,
-    property_value: str
-) -> str:
+def set_message_property(account_var: str, mailbox_var: str, message_id: int, property_name: str, property_value: str) -> str:
     """Generate AppleScript to set a message property and return subject.
 
     Args:
@@ -152,11 +145,7 @@ def mailbox_iterator(inner_operations: str, account: str | None = None) -> str:
     """
 
 
-def list_attachments(
-    account_var: str,
-    mailbox_var: str,
-    message_id: int
-) -> str:
+def list_attachments(account_var: str, mailbox_var: str, message_id: int) -> str:
     """Generate AppleScript to list message attachments.
 
     Args:

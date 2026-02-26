@@ -19,10 +19,7 @@ def mock_run(monkeypatch):
     def mock_template(inner_ops, cap=20, account=None):
         return 'tell application "Mail"\nset output to ""\nend tell'
 
-    monkeypatch.setattr(
-        "mxctl.commands.mail.ai.inbox_iterator_all_accounts",
-        mock_template
-    )
+    monkeypatch.setattr("mxctl.commands.mail.ai.inbox_iterator_all_accounts", mock_template)
 
     return mock
 

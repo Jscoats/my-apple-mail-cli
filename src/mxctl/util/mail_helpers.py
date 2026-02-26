@@ -185,7 +185,7 @@ def normalize_subject(subject: str) -> str:
     """
     # Loop to handle multiple nested prefixes
     while True:
-        normalized = re.sub(r'^(Re|Fwd|Fw|AW|SV|VS):\s*', '', subject, flags=re.IGNORECASE).strip()
+        normalized = re.sub(r"^(Re|Fwd|Fw|AW|SV|VS):\s*", "", subject, flags=re.IGNORECASE).strip()
         if normalized == subject:
             break
         subject = normalized

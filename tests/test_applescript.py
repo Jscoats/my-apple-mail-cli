@@ -59,7 +59,7 @@ class TestRunSmartQuotes:
         """Smart-quoted can\u2019t get account triggers friendly error."""
         mock_result = Mock()
         mock_result.returncode = 1
-        mock_result.stderr = "Can\u2019t get account \"Foo\". (-1728)"
+        mock_result.stderr = 'Can\u2019t get account "Foo". (-1728)'
 
         monkeypatch.setattr("mxctl.util.applescript.subprocess.run", lambda *a, **kw: mock_result)
 
@@ -73,7 +73,7 @@ class TestRunSmartQuotes:
         """Smart-quoted can\u2019t get message triggers friendly error."""
         mock_result = Mock()
         mock_result.returncode = 1
-        mock_result.stderr = "Can\u2019t get message 1 of mailbox \"INBOX\". (-1719)"
+        mock_result.stderr = 'Can\u2019t get message 1 of mailbox "INBOX". (-1719)'
 
         monkeypatch.setattr("mxctl.util.applescript.subprocess.run", lambda *a, **kw: mock_result)
 
@@ -87,7 +87,7 @@ class TestRunSmartQuotes:
         """ASCII straight-quoted can't get account still works."""
         mock_result = Mock()
         mock_result.returncode = 1
-        mock_result.stderr = "Can't get account \"Bar\". (-1728)"
+        mock_result.stderr = 'Can\'t get account "Bar". (-1728)'
 
         monkeypatch.setattr("mxctl.util.applescript.subprocess.run", lambda *a, **kw: mock_result)
 

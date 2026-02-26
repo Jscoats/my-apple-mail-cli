@@ -10,6 +10,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_args(**kwargs):
     defaults = {"json": False}
     defaults.update(kwargs)
@@ -19,6 +20,7 @@ def _make_args(**kwargs):
 # ---------------------------------------------------------------------------
 # _load_templates / _save_templates
 # ---------------------------------------------------------------------------
+
 
 class TestLoadSaveTemplates:
     def test_load_empty_when_no_file(self, monkeypatch, tmp_path):
@@ -56,6 +58,7 @@ class TestLoadSaveTemplates:
 # ---------------------------------------------------------------------------
 # cmd_templates_list
 # ---------------------------------------------------------------------------
+
 
 class TestTemplatesList:
     def test_list_empty(self, monkeypatch, capsys, tmp_path):
@@ -102,6 +105,7 @@ class TestTemplatesList:
 # cmd_templates_create
 # ---------------------------------------------------------------------------
 
+
 class TestTemplatesCreate:
     def test_create_with_flags(self, monkeypatch, capsys, tmp_path):
         from mxctl.commands.mail.templates import _load_templates, cmd_templates_create
@@ -125,6 +129,7 @@ class TestTemplatesCreate:
 # ---------------------------------------------------------------------------
 # cmd_templates_show
 # ---------------------------------------------------------------------------
+
 
 class TestTemplatesShow:
     def test_show_existing(self, monkeypatch, capsys, tmp_path):
@@ -157,6 +162,7 @@ class TestTemplatesShow:
 # ---------------------------------------------------------------------------
 # cmd_templates_delete
 # ---------------------------------------------------------------------------
+
 
 class TestTemplatesDelete:
     def test_delete_existing(self, monkeypatch, capsys, tmp_path):

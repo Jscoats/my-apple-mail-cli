@@ -10,13 +10,9 @@ from mxctl.util.formatting import format_output, truncate
 # inbox
 # ---------------------------------------------------------------------------
 
-def cmd_inbox(args) -> None:
-    """List unread counts and recent messages, optionally scoped to one account."""
-    # Use only the explicitly-passed -a flag, not the config default.
-    # resolve_account() would return the default account (e.g. iCloud) when no
-    # flag is given, causing inbox to show only one account instead of all.
-    account = getattr(args, "account", None)
 
+def get_inbox_summary(account: str | None = None) -> list[dict]:
+    """Fetch unread counts and recent messages across accounts."""
     if account:
         acct_escaped = escape(account)
         script = f"""
@@ -84,17 +80,8 @@ def cmd_inbox(args) -> None:
     result = run(script)
 
     if not result.strip():
-        if not os.path.isfile(CONFIG_FILE):
-            format_output(
-                args,
-                "No mail accounts found or no INBOX mailboxes available.\n"
-                "Run `mxctl init` to configure your default account.",
-            )
-        else:
-            format_output(args, "No mail accounts found or no INBOX mailboxes available.")
-        return
+        return []
 
-    # Parse once into structured data
     accounts = []
     current = None
     for line in result.strip().split("\n"):
@@ -104,12 +91,14 @@ def cmd_inbox(args) -> None:
         if parts[0] == "MSG" and len(parts) >= 6:
             _, acct, msg_id, subject, sender, date = parts[:6]
             if current:
-                current["recent_unread"].append({
-                    "id": int(msg_id) if msg_id.isdigit() else msg_id,
-                    "subject": subject,
-                    "sender": sender,
-                    "date": date,
-                })
+                current["recent_unread"].append(
+                    {
+                        "id": int(msg_id) if msg_id.isdigit() else msg_id,
+                        "subject": subject,
+                        "sender": sender,
+                        "date": date,
+                    }
+                )
         elif len(parts) >= 3:
             acct, unread, total = parts[:3]
             current = {
@@ -119,6 +108,28 @@ def cmd_inbox(args) -> None:
                 "recent_unread": [],
             }
             accounts.append(current)
+
+    return accounts
+
+
+def cmd_inbox(args) -> None:
+    """List unread counts and recent messages, optionally scoped to one account."""
+    # Use only the explicitly-passed -a flag, not the config default.
+    # resolve_account() would return the default account (e.g. iCloud) when no
+    # flag is given, causing inbox to show only one account instead of all.
+    account = getattr(args, "account", None)
+
+    accounts = get_inbox_summary(account)
+
+    if not accounts:
+        if not os.path.isfile(CONFIG_FILE):
+            format_output(
+                args,
+                "No mail accounts found or no INBOX mailboxes available.\nRun `mxctl init` to configure your default account.",
+            )
+        else:
+            format_output(args, "No mail accounts found or no INBOX mailboxes available.")
+        return
 
     # Assign sequential aliases across all accounts
     all_msg_ids = []
@@ -154,8 +165,9 @@ def cmd_inbox(args) -> None:
 # accounts
 # ---------------------------------------------------------------------------
 
-def cmd_accounts(args) -> None:
-    """List configured mail accounts."""
+
+def get_accounts() -> list[dict]:
+    """Fetch all configured mail accounts."""
     script = f"""
     tell application "Mail"
         set output to ""
@@ -173,22 +185,33 @@ def cmd_accounts(args) -> None:
     result = run(script)
 
     if not result.strip():
-        format_output(args, "No mail accounts found.")
-        return
+        return []
 
-    # Parse once into structured data
     accounts = []
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
         parts = line.split(FIELD_SEPARATOR)
         if len(parts) >= 4:
-            accounts.append({
-                "name": parts[0],
-                "full_name": parts[1],
-                "email": parts[2],
-                "enabled": parts[3].lower() == "true",
-            })
+            accounts.append(
+                {
+                    "name": parts[0],
+                    "full_name": parts[1],
+                    "email": parts[2],
+                    "enabled": parts[3].lower() == "true",
+                }
+            )
+
+    return accounts
+
+
+def cmd_accounts(args) -> None:
+    """List configured mail accounts."""
+    accounts = get_accounts()
+
+    if not accounts:
+        format_output(args, "No mail accounts found.")
+        return
 
     # Build text from parsed data
     text = "Mail Accounts:"
@@ -202,10 +225,9 @@ def cmd_accounts(args) -> None:
 # mailboxes
 # ---------------------------------------------------------------------------
 
-def cmd_mailboxes(args) -> None:
-    """List mailboxes with unread counts."""
-    account = resolve_account(getattr(args, "account", None))
 
+def get_mailboxes(account: str | None = None) -> list[dict]:
+    """Fetch mailboxes with unread counts."""
     if account:
         acct_escaped = escape(account)
         script = f"""
@@ -239,11 +261,8 @@ def cmd_mailboxes(args) -> None:
     result = run(script)
 
     if not result.strip():
-        msg = f"No mailboxes found in account '{account}'." if account else "No mailboxes found."
-        format_output(args, msg)
-        return
+        return []
 
-    # Parse once into structured data
     mailboxes = []
     for line in result.strip().split("\n"):
         if not line.strip():
@@ -252,11 +271,27 @@ def cmd_mailboxes(args) -> None:
         if account and len(parts) >= 2:
             mailboxes.append({"name": parts[0], "unread": int(parts[1]) if parts[1].isdigit() else 0})
         elif not account and len(parts) >= 3:
-            mailboxes.append({
-                "account": parts[0],
-                "name": parts[1],
-                "unread": int(parts[2]) if parts[2].isdigit() else 0,
-            })
+            mailboxes.append(
+                {
+                    "account": parts[0],
+                    "name": parts[1],
+                    "unread": int(parts[2]) if parts[2].isdigit() else 0,
+                }
+            )
+
+    return mailboxes
+
+
+def cmd_mailboxes(args) -> None:
+    """List mailboxes with unread counts."""
+    account = resolve_account(getattr(args, "account", None))
+
+    mailboxes = get_mailboxes(account)
+
+    if not mailboxes:
+        msg = f"No mailboxes found in account '{account}'." if account else "No mailboxes found."
+        format_output(args, msg)
+        return
 
     # Build text from parsed data
     header = f"Mailboxes in {account}:" if account else "All Mailboxes:"
@@ -274,11 +309,9 @@ def cmd_mailboxes(args) -> None:
 # count
 # ---------------------------------------------------------------------------
 
-def cmd_count(args) -> None:
-    """Print unread message count."""
-    account = resolve_account(getattr(args, "account", None))
-    mailbox = getattr(args, "mailbox", None)
 
+def get_unread_count(account: str | None = None, mailbox: str | None = None) -> dict:
+    """Fetch unread message count for an account/mailbox or across all accounts."""
     if account:
         acct_escaped = escape(account)
         mb = mailbox or "INBOX"
@@ -291,10 +324,9 @@ def cmd_count(args) -> None:
         '''
         result = run(script)
         count = int(result.strip()) if result.strip().isdigit() else 0
-        format_output(args, str(count),
-                      json_data={"unread": count, "account": account, "mailbox": mb})
+        return {"unread": count, "account": account, "mailbox": mb}
     else:
-        script = '''
+        script = """
         tell application "Mail"
             set totalUnread to 0
             repeat with acct in (every account)
@@ -309,16 +341,25 @@ def cmd_count(args) -> None:
             end repeat
             return totalUnread
         end tell
-        '''
+        """
         result = run(script)
         count = int(result.strip()) if result.strip().isdigit() else 0
-        format_output(args, str(count),
-                      json_data={"unread": count, "account": "all"})
+        return {"unread": count, "account": "all"}
+
+
+def cmd_count(args) -> None:
+    """Print unread message count."""
+    account = resolve_account(getattr(args, "account", None))
+    mailbox = getattr(args, "mailbox", None)
+
+    data = get_unread_count(account, mailbox)
+    format_output(args, str(data["unread"]), json_data=data)
 
 
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+
 
 def register(subparsers) -> None:
     """Register account-related mail subcommands."""

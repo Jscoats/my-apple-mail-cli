@@ -22,31 +22,21 @@ from mxctl.util.mail_helpers import extract_email, normalize_subject, parse_mess
 # export — save message(s) as markdown
 # ---------------------------------------------------------------------------
 
-def cmd_export(args) -> None:
-    """Export message(s) as markdown files."""
-    account = resolve_account(getattr(args, "account", None))
-    if not account:
-        die("Account required. Use -a ACCOUNT.")
 
-    target = args.target  # could be a message ID or mailbox name
-    dest = args.to
-    after = getattr(args, "after", None)
-
-    # If target is numeric, it's a single message export
-    if target.isdigit():
-        _export_single(args, int(target), account, getattr(args, "mailbox", None) or DEFAULT_MAILBOX, dest)
-    else:
-        _export_bulk(args, target, account, dest, after)
-
-
-def _export_single(args, msg_id: int, account: str, mailbox: str, dest: str) -> None:
+def export_message(
+    account: str,
+    mailbox: str,
+    message_id: int,
+    dest: str,
+) -> dict:
+    """Export a single message as a markdown file. Returns dict with path and subject."""
     acct_escaped = escape(account)
     mb_escaped = escape(mailbox)
 
     script = f"""
     tell application "Mail"
         set mb to mailbox "{mb_escaped}" of account "{acct_escaped}"
-        set theMsg to first message of mb whose id is {msg_id}
+        set theMsg to first message of mb whose id is {message_id}
         set msgSubject to subject of theMsg
         set msgSender to sender of theMsg
         set msgDate to date received of theMsg
@@ -69,8 +59,8 @@ def _export_single(args, msg_id: int, account: str, mailbox: str, dest: str) -> 
     subject, sender, date, to_list, content = parts[:5]
 
     # Build markdown
-    safe_subject = re.sub(r'[^\w\s-]', '', subject).strip().replace(' ', '-')[:60]
-    filename = f"{safe_subject}.md" if safe_subject else f"message-{msg_id}.md"
+    safe_subject = re.sub(r"[^\w\s-]", "", subject).strip().replace(" ", "-")[:60]
+    filename = f"{safe_subject}.md" if safe_subject else f"message-{message_id}.md"
 
     md = f"# {subject}\n\n"
     md += f"**From:** {sender}  \n"
@@ -85,7 +75,9 @@ def _export_single(args, msg_id: int, account: str, mailbox: str, dest: str) -> 
         # Guard against path traversal in the generated filename
         real_filepath = os.path.realpath(os.path.abspath(filepath))
         real_dest = os.path.realpath(os.path.abspath(dest_path))
-        if not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest:  # pragma: no cover — re.sub strips dangerous chars before this
+        if (
+            not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest
+        ):  # pragma: no cover — re.sub strips dangerous chars before this
             die("Unsafe export filename: path traversal detected.")
     else:
         filepath = dest_path
@@ -94,16 +86,23 @@ def _export_single(args, msg_id: int, account: str, mailbox: str, dest: str) -> 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(md)
 
-    format_output(args, f"Exported to: {filepath}", json_data={"path": filepath, "subject": subject})
+    return {"path": filepath, "subject": subject}
 
 
-def _export_bulk(args, mailbox: str, account: str, dest: str, after: str | None) -> None:
+def export_messages(
+    account: str,
+    mailbox: str,
+    dest: str,
+    after: str | None = None,
+) -> dict:
+    """Export messages from a mailbox as markdown files. Returns dict with directory and count."""
     acct_escaped = escape(account)
     mb_escaped = escape(mailbox)
 
     whose = ""
     if after:
         from mxctl.util.dates import parse_date, to_applescript_date
+
         dt = parse_date(after)
         whose = f'whose date received >= date "{to_applescript_date(dt)}"'
 
@@ -138,13 +137,15 @@ def _export_bulk(args, mailbox: str, account: str, dest: str, after: str | None)
             continue
         msg_id, subject, sender, date, content = parts[0], parts[1], parts[2], parts[3], FIELD_SEPARATOR.join(parts[4:])
 
-        safe_subject = re.sub(r'[^\w\s-]', '', subject).strip().replace(' ', '-')[:50]
+        safe_subject = re.sub(r"[^\w\s-]", "", subject).strip().replace(" ", "-")[:50]
         filename = f"{safe_subject}-{msg_id}.md" if safe_subject else f"message-{msg_id}.md"
 
         filepath = os.path.join(dest_dir, filename)
         real_filepath = os.path.realpath(os.path.abspath(filepath))
         real_dest = os.path.realpath(os.path.abspath(dest_dir))
-        if not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest:  # pragma: no cover — re.sub strips dangerous chars before this
+        if (
+            not real_filepath.startswith(real_dest + os.sep) and real_filepath != real_dest
+        ):  # pragma: no cover — re.sub strips dangerous chars before this
             continue
 
         md = f"# {subject}\n\n**From:** {sender}  \n**Date:** {date}\n\n---\n\n{content}"
@@ -152,24 +153,61 @@ def _export_bulk(args, mailbox: str, account: str, dest: str, after: str | None)
             f.write(md)
         exported += 1
 
-    format_output(args, f"Exported {exported} messages to {dest_dir}",
-                  json_data={"directory": dest_dir, "exported": exported})
+    return {"directory": dest_dir, "exported": exported}
+
+
+# Legacy private wrappers kept for test compatibility
+def _export_single(args, msg_id: int, account: str, mailbox: str, dest: str) -> None:
+    data = export_message(account, mailbox, msg_id, dest)
+    format_output(args, f"Exported to: {data['path']}", json_data=data)
+
+
+def _export_bulk(args, mailbox: str, account: str, dest: str, after: str | None) -> None:
+    data = export_messages(account, mailbox, dest, after)
+    format_output(
+        args,
+        f"Exported {data['exported']} messages to {data['directory']}",
+        json_data=data,
+    )
+
+
+def cmd_export(args) -> None:
+    """Export message(s) as markdown files."""
+    account = resolve_account(getattr(args, "account", None))
+    if not account:
+        die("Account required. Use -a ACCOUNT.")
+
+    target = args.target  # could be a message ID or mailbox name
+    dest = args.to
+    after = getattr(args, "after", None)
+
+    # If target is numeric, it's a single message export
+    if target.isdigit():
+        mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
+        data = export_message(account, mailbox, int(target), dest)
+        format_output(args, f"Exported to: {data['path']}", json_data=data)
+    else:
+        data = export_messages(account, target, dest, after)
+        format_output(
+            args,
+            f"Exported {data['exported']} messages to {data['directory']}",
+            json_data=data,
+        )
 
 
 # ---------------------------------------------------------------------------
 # thread — show conversation thread
 # ---------------------------------------------------------------------------
 
-def cmd_thread(args) -> None:
-    """Show full conversation thread for a message."""
-    account = resolve_account(getattr(args, "account", None))
-    if not account:
-        die("Account required. Use -a ACCOUNT.")
-    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = validate_msg_id(args.id)
-    limit = getattr(args, "limit", 100)
-    all_accounts = getattr(args, "all_accounts", False)
 
+def get_thread(
+    account: str,
+    mailbox: str,
+    message_id: int,
+    limit: int = 100,
+    all_accounts: bool = False,
+) -> dict:
+    """Fetch thread messages for a given message. Returns dict with thread_subject and messages list."""
     acct_escaped = escape(account)
     mb_escaped = escape(mailbox)
 
@@ -189,11 +227,11 @@ def cmd_thread(args) -> None:
 
     # Search for messages with this subject (default: current account only)
     if all_accounts:
-        acct_loop = 'repeat with acct in (every account)\nset acctName to name of acct'
-        acct_loop_end = 'end repeat'
+        acct_loop = "repeat with acct in (every account)\nset acctName to name of acct"
+        acct_loop_end = "end repeat"
     else:
         acct_loop = f'set acct to account "{acct_escaped}"\nset acctName to name of acct'
-        acct_loop_end = ''
+        acct_loop_end = ""
 
     script2 = f"""
     tell application "Mail"
@@ -216,18 +254,36 @@ def cmd_thread(args) -> None:
     """
 
     result = run(script2, timeout=APPLESCRIPT_TIMEOUT_LONG)
-    if not result.strip():
-        format_output(args, f"No thread found for '{subject}'.",
-                      json_data={"thread_subject": thread_subject, "messages": []})
-        return
 
     messages = []
-    for line in result.strip().split("\n"):
-        if not line.strip():
-            continue
-        msg = parse_message_line(line, ["id", "subject", "sender", "date", "mailbox", "account"], FIELD_SEPARATOR)
-        if msg is not None:
-            messages.append(msg)
+    if result.strip():
+        for line in result.strip().split("\n"):
+            if not line.strip():
+                continue
+            msg = parse_message_line(line, ["id", "subject", "sender", "date", "mailbox", "account"], FIELD_SEPARATOR)
+            if msg is not None:
+                messages.append(msg)
+
+    return {"thread_subject": thread_subject, "messages": messages}
+
+
+def cmd_thread(args) -> None:
+    """Show full conversation thread for a message."""
+    account = resolve_account(getattr(args, "account", None))
+    if not account:
+        die("Account required. Use -a ACCOUNT.")
+    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
+    message_id = validate_msg_id(args.id)
+    limit = getattr(args, "limit", 100)
+    all_accounts = getattr(args, "all_accounts", False)
+
+    data = get_thread(account, mailbox, message_id, limit=limit, all_accounts=all_accounts)
+    thread_subject = data["thread_subject"]
+    messages = data["messages"]
+
+    if not messages:
+        format_output(args, f"No thread found for '{thread_subject}'.", json_data=data)
+        return
 
     save_message_aliases([m["id"] for m in messages])
     for i, m in enumerate(messages, 1):
@@ -244,15 +300,14 @@ def cmd_thread(args) -> None:
 # reply — create a reply draft
 # ---------------------------------------------------------------------------
 
-def cmd_reply(args) -> None:
-    """Create a reply draft for a message."""
-    account = resolve_account(getattr(args, "account", None))
-    if not account:
-        die("Account required. Use -a ACCOUNT.")
-    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = validate_msg_id(args.id)
-    body = args.body
 
+def create_reply(
+    account: str,
+    mailbox: str,
+    message_id: int,
+    body: str,
+) -> dict:
+    """Create a reply draft for a message. Returns dict with status, to, and subject."""
     acct_escaped = escape(account)
     mb_escaped = escape(mailbox)
 
@@ -309,24 +364,38 @@ def cmd_reply(args) -> None:
 
     run(draft_script)
 
-    format_output(args,
-                  f"Reply draft created.\nTo: {reply_to}\nSubject: {reply_subject}\n\nOpen in Mail.app to review and send.",
-                  json_data={"status": "reply_draft_created", "to": reply_to, "subject": reply_subject})
+    return {"status": "reply_draft_created", "to": reply_to, "subject": reply_subject}
+
+
+def cmd_reply(args) -> None:
+    """Create a reply draft for a message."""
+    account = resolve_account(getattr(args, "account", None))
+    if not account:
+        die("Account required. Use -a ACCOUNT.")
+    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
+    message_id = validate_msg_id(args.id)
+    body = args.body
+
+    data = create_reply(account, mailbox, message_id, body)
+    format_output(
+        args,
+        f"Reply draft created.\nTo: {data['to']}\nSubject: {data['subject']}\n\nOpen in Mail.app to review and send.",
+        json_data=data,
+    )
 
 
 # ---------------------------------------------------------------------------
 # forward — create a forward draft
 # ---------------------------------------------------------------------------
 
-def cmd_forward(args) -> None:
-    """Create a forward draft for a message."""
-    account = resolve_account(getattr(args, "account", None))
-    if not account:
-        die("Account required. Use -a ACCOUNT.")
-    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
-    message_id = validate_msg_id(args.id)
-    to_addr = args.to
 
+def create_forward(
+    account: str,
+    mailbox: str,
+    message_id: int,
+    to_addr: str,
+) -> dict:
+    """Create a forward draft for a message. Returns dict with status, to, and subject."""
     acct_escaped = escape(account)
     mb_escaped = escape(mailbox)
 
@@ -380,14 +449,30 @@ def cmd_forward(args) -> None:
 
     run(draft_script)
 
-    format_output(args,
-                  f"Forward draft created.\nTo: {to_addr}\nSubject: {fwd_subject}\n\nOpen in Mail.app to review and send.",
-                  json_data={"status": "forward_draft_created", "to": to_addr, "subject": fwd_subject})
+    return {"status": "forward_draft_created", "to": to_addr, "subject": fwd_subject}
+
+
+def cmd_forward(args) -> None:
+    """Create a forward draft for a message."""
+    account = resolve_account(getattr(args, "account", None))
+    if not account:
+        die("Account required. Use -a ACCOUNT.")
+    mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
+    message_id = validate_msg_id(args.id)
+    to_addr = args.to
+
+    data = create_forward(account, mailbox, message_id, to_addr)
+    format_output(
+        args,
+        f"Forward draft created.\nTo: {to_addr}\nSubject: {data['subject']}\n\nOpen in Mail.app to review and send.",
+        json_data=data,
+    )
 
 
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+
 
 def register(subparsers) -> None:
     """Register composite mail subcommands."""

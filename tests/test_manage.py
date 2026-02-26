@@ -11,6 +11,7 @@ from mxctl.commands.mail.manage import cmd_create_mailbox, cmd_delete_mailbox, c
 
 def test_cmd_empty_trash_single_account(monkeypatch, capsys):
     """Test empty-trash for a single account."""
+
     # Mock resolve_account to return the account
     def mock_resolve_account(account):
         return "iCloud"
@@ -35,6 +36,7 @@ def test_cmd_empty_trash_single_account(monkeypatch, capsys):
 
 def test_cmd_empty_trash_all_accounts(monkeypatch, capsys):
     """Test empty-trash with --all flag."""
+
     def mock_resolve_account(account):
         return None
 
@@ -54,6 +56,7 @@ def test_cmd_empty_trash_all_accounts(monkeypatch, capsys):
 
 def test_cmd_empty_trash_already_empty(monkeypatch, capsys):
     """Test empty-trash when trash is already empty."""
+
     def mock_resolve_account(account):
         return "iCloud"
 
@@ -72,6 +75,7 @@ def test_cmd_empty_trash_already_empty(monkeypatch, capsys):
 
 def test_cmd_empty_trash_json_output(monkeypatch, capsys):
     """Test empty-trash with JSON output."""
+
     def mock_resolve_account(account):
         return "iCloud"
 
@@ -96,6 +100,7 @@ def test_cmd_empty_trash_json_output(monkeypatch, capsys):
 
 def test_cmd_empty_trash_json_already_empty(monkeypatch, capsys):
     """Test empty-trash JSON output when already empty."""
+
     def mock_resolve_account(account):
         return "iCloud"
 
@@ -116,6 +121,7 @@ def test_cmd_empty_trash_json_already_empty(monkeypatch, capsys):
 
 def test_cmd_empty_trash_no_account_no_all_flag(monkeypatch):
     """Test empty-trash fails when neither account nor --all is provided."""
+
     def mock_resolve_account(account):
         return None
 
@@ -129,6 +135,7 @@ def test_cmd_empty_trash_no_account_no_all_flag(monkeypatch):
 
 def test_cmd_empty_trash_menu_not_found(monkeypatch):
     """Test empty-trash handles menu item not found error."""
+
     def mock_resolve_account(account):
         return "InvalidAccount"
 
@@ -139,10 +146,7 @@ def test_cmd_empty_trash_menu_not_found(monkeypatch):
     monkeypatch.setattr("mxctl.commands.mail.manage.run", mock_run)
 
     # Mock subprocess.run to fail with "Can't get menu item"
-    mock_subprocess = Mock(return_value=Mock(
-        returncode=1,
-        stderr="Can't get menu item InvalidAccount… of menu 1"
-    ))
+    mock_subprocess = Mock(return_value=Mock(returncode=1, stderr="Can't get menu item InvalidAccount… of menu 1"))
     monkeypatch.setattr("mxctl.commands.mail.manage.subprocess.run", mock_subprocess)
 
     args = Namespace(account="InvalidAccount", all=False, json=False)
@@ -153,6 +157,7 @@ def test_cmd_empty_trash_menu_not_found(monkeypatch):
 
 def test_cmd_empty_trash_timeout(monkeypatch):
     """Test empty-trash handles timeout gracefully."""
+
     def mock_resolve_account(account):
         return "iCloud"
 
@@ -176,6 +181,7 @@ def test_cmd_empty_trash_timeout(monkeypatch):
 
 def test_cmd_empty_trash_nonzero_message_count_handling(monkeypatch, capsys):
     """Test empty-trash handles non-numeric message count gracefully."""
+
     def mock_resolve_account(account):
         return "iCloud"
 
@@ -195,6 +201,7 @@ def test_cmd_empty_trash_nonzero_message_count_handling(monkeypatch, capsys):
 
 def test_cmd_empty_trash_applescript_error_handling(monkeypatch, capsys):
     """Test empty-trash handles AppleScript errors during count gracefully."""
+
     def mock_resolve_account(account):
         return "iCloud"
 
@@ -217,6 +224,7 @@ def test_cmd_empty_trash_applescript_error_handling(monkeypatch, capsys):
 # ---------------------------------------------------------------------------
 # cmd_create_mailbox
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_create_mailbox_success(monkeypatch, capsys):
     """Test create-mailbox calls run() and reports creation."""
@@ -251,6 +259,7 @@ def test_cmd_create_mailbox_no_account_dies(monkeypatch):
 # ---------------------------------------------------------------------------
 # cmd_delete_mailbox
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_delete_mailbox_without_force_dies(monkeypatch):
     """Test delete-mailbox exits without --force flag."""

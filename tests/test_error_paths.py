@@ -19,9 +19,7 @@ class TestResolveMessageContextErrors:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         monkeypatch.setattr("mxctl.config.CONFIG_DIR", str(config_dir))
-        monkeypatch.setattr(
-            "mxctl.config.CONFIG_FILE", str(config_dir / "config.json")
-        )
+        monkeypatch.setattr("mxctl.config.CONFIG_FILE", str(config_dir / "config.json"))
         monkeypatch.setattr("mxctl.config.STATE_FILE", str(config_dir / "state.json"))
 
         args = Namespace(account=None, mailbox=None)
@@ -36,9 +34,7 @@ class TestResolveMessageContextErrors:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         monkeypatch.setattr("mxctl.config.CONFIG_DIR", str(config_dir))
-        monkeypatch.setattr(
-            "mxctl.config.CONFIG_FILE", str(config_dir / "config.json")
-        )
+        monkeypatch.setattr("mxctl.config.CONFIG_FILE", str(config_dir / "config.json"))
         monkeypatch.setattr("mxctl.config.STATE_FILE", str(config_dir / "state.json"))
 
         args = Namespace(account="TestAccount", mailbox=None)
@@ -53,17 +49,15 @@ class TestResolveMessageContextErrors:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         monkeypatch.setattr("mxctl.config.CONFIG_DIR", str(config_dir))
-        monkeypatch.setattr(
-            "mxctl.config.CONFIG_FILE", str(config_dir / "config.json")
-        )
+        monkeypatch.setattr("mxctl.config.CONFIG_FILE", str(config_dir / "config.json"))
         monkeypatch.setattr("mxctl.config.STATE_FILE", str(config_dir / "state.json"))
 
-        args = Namespace(account='Test"Account', mailbox='Mail\\Box')
+        args = Namespace(account='Test"Account', mailbox="Mail\\Box")
         _, _, acct_escaped, mb_escaped = resolve_message_context(args)
 
         # The escape function should handle quotes and backslashes
         assert '"' not in acct_escaped or '\\"' in acct_escaped
-        assert '\\' not in mb_escaped or '\\\\' in mb_escaped
+        assert "\\" not in mb_escaped or "\\\\" in mb_escaped
 
 
 class TestAppleScriptErrorHandling:
@@ -74,14 +68,20 @@ class TestAppleScriptErrorHandling:
         from mxctl.commands.mail.batch import cmd_batch_move
 
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: "iCloud")
+
         # Simulate run() encountering an AppleScript error and calling sys.exit(1)
         def failing_run(script, **kwargs):
             raise SystemExit(1)
+
         monkeypatch.setattr("mxctl.commands.mail.batch.run", failing_run)
 
         args = Namespace(
-            account="iCloud", from_sender="spam@example.com",
-            to_mailbox="Archive", dry_run=False, limit=None, json=False,
+            account="iCloud",
+            from_sender="spam@example.com",
+            to_mailbox="Archive",
+            dry_run=False,
+            limit=None,
+            json=False,
         )
         with pytest.raises(SystemExit) as exc_info:
             cmd_batch_move(args)
@@ -100,12 +100,12 @@ class TestAppleScriptErrorHandling:
         monkeypatch.setattr("mxctl.commands.mail.messages.run", Mock(return_value=malformed_output))
 
         args = Namespace(account="iCloud", mailbox="INBOX", id=42, short=False, json=False)
-        # Should NOT raise — cmd_read has a graceful fallback for < 16 fields
+        # Should NOT raise — cmd_read gracefully handles < 16 fields
         cmd_read(args)
 
         captured = capsys.readouterr()
-        # The fallback branch prints the raw result under "Message details:"
-        assert "Message details:" in captured.out
+        # The refactored code returns empty dict from read_message() and prints "not found"
+        assert "not found" in captured.out
 
     def test_batch_delete_missing_filter_args_dies(self, monkeypatch):
         """cmd_batch_delete should exit with code 1 when neither --older-than nor --from-sender is given."""
@@ -114,9 +114,14 @@ class TestAppleScriptErrorHandling:
         monkeypatch.setattr("mxctl.commands.mail.batch.resolve_account", lambda _: "iCloud")
 
         args = Namespace(
-            account="iCloud", mailbox=None,
-            older_than=None, from_sender=None,
-            dry_run=False, force=False, limit=None, json=False,
+            account="iCloud",
+            mailbox=None,
+            older_than=None,
+            from_sender=None,
+            dry_run=False,
+            force=False,
+            limit=None,
+            json=False,
         )
         with pytest.raises(SystemExit) as exc_info:
             cmd_batch_delete(args)
@@ -160,8 +165,12 @@ class TestBatchOperationDryRun:
         monkeypatch.setattr("mxctl.commands.mail.batch.run", mock_run)
 
         args = Namespace(
-            account="iCloud", from_sender="newsletter@example.com",
-            to_mailbox="Archive", dry_run=True, limit=None, json=False,
+            account="iCloud",
+            from_sender="newsletter@example.com",
+            to_mailbox="Archive",
+            dry_run=True,
+            limit=None,
+            json=False,
         )
         cmd_batch_move(args)
 
@@ -182,8 +191,12 @@ class TestBatchOperationDryRun:
         monkeypatch.setattr("mxctl.commands.mail.batch.run", mock_run)
 
         args = Namespace(
-            account="iCloud", from_sender="bulk@example.com",
-            to_mailbox="Bulk", dry_run=True, limit=10, json=False,
+            account="iCloud",
+            from_sender="bulk@example.com",
+            to_mailbox="Bulk",
+            dry_run=True,
+            limit=10,
+            json=False,
         )
         cmd_batch_move(args)
 
@@ -202,9 +215,14 @@ class TestBatchOperationDryRun:
         monkeypatch.setattr("mxctl.commands.mail.batch.run", mock_run)
 
         args = Namespace(
-            account="iCloud", mailbox="INBOX",
-            older_than=30, from_sender=None,
-            dry_run=True, force=False, limit=None, json=False,
+            account="iCloud",
+            mailbox="INBOX",
+            older_than=30,
+            from_sender=None,
+            dry_run=True,
+            force=False,
+            limit=None,
+            json=False,
         )
         cmd_batch_delete(args)
 
@@ -219,6 +237,7 @@ class TestBatchOperationDryRun:
 # ---------------------------------------------------------------------------
 # inbox_tools.py: cmd_process_inbox
 # ---------------------------------------------------------------------------
+
 
 class TestCmdProcessInbox:
     """Smoke tests for cmd_process_inbox."""
@@ -270,6 +289,7 @@ class TestCmdProcessInbox:
 # inbox_tools.py: cmd_weekly_review
 # ---------------------------------------------------------------------------
 
+
 class TestCmdWeeklyReview:
     """Smoke tests for cmd_weekly_review."""
 
@@ -320,6 +340,7 @@ class TestCmdWeeklyReview:
 # ---------------------------------------------------------------------------
 # inbox_tools.py: cmd_clean_newsletters
 # ---------------------------------------------------------------------------
+
 
 class TestCmdCleanNewsletters:
     """Smoke tests for cmd_clean_newsletters."""
@@ -391,6 +412,7 @@ class TestCmdCleanNewsletters:
 # attachments.py: cmd_save_attachment
 # ---------------------------------------------------------------------------
 
+
 class TestCmdSaveAttachment:
     """Smoke tests for cmd_save_attachment."""
 
@@ -416,15 +438,21 @@ class TestCmdSaveAttachment:
 
         # Patch os.path.isfile to return True for our fake path
         original_isfile = os.path.isfile
+
         def patched_isfile(p):
             if p == str(tmp_path / att_name):
                 return True
             return original_isfile(p)
+
         monkeypatch.setattr("mxctl.commands.mail.attachments.os.path.isfile", patched_isfile)
 
         args = Namespace(
-            account="iCloud", mailbox="INBOX", id=42,
-            attachment=att_name, output_dir=str(tmp_path), json=False,
+            account="iCloud",
+            mailbox="INBOX",
+            id=42,
+            attachment=att_name,
+            output_dir=str(tmp_path),
+            json=False,
         )
         cmd_save_attachment(args)
 
@@ -446,8 +474,12 @@ class TestCmdSaveAttachment:
         monkeypatch.setattr("mxctl.commands.mail.attachments.run", mock_run)
 
         args = Namespace(
-            account="iCloud", mailbox="INBOX", id=42,
-            attachment="file.pdf", output_dir="/tmp", json=False,
+            account="iCloud",
+            mailbox="INBOX",
+            id=42,
+            attachment="file.pdf",
+            output_dir="/tmp",
+            json=False,
         )
         with pytest.raises(SystemExit):
             cmd_save_attachment(args)
@@ -470,16 +502,21 @@ class TestCmdSaveAttachment:
         fake_file.write_bytes(b"data")
 
         original_isfile = os.path.isfile
+
         def patched_isfile(p):
             if p == str(tmp_path / att_name):
                 return True
             return original_isfile(p)
+
         monkeypatch.setattr("mxctl.commands.mail.attachments.os.path.isfile", patched_isfile)
 
         args = Namespace(
-            account="iCloud", mailbox="INBOX", id=42,
+            account="iCloud",
+            mailbox="INBOX",
+            id=42,
             attachment="1",  # index 1 → invoice.pdf
-            output_dir=str(tmp_path), json=False,
+            output_dir=str(tmp_path),
+            json=False,
         )
         cmd_save_attachment(args)
 
