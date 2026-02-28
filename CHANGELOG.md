@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-02-28
+
+### Fixed
+
+- `mxctl --version` now reports the correct version at runtime (was stuck at `0.3.0` since the rename)
+- Consolidated duplicate `get_headers()` / `get_raw_headers()` code in system.py
+- Moved delayed inline imports to module level in actions.py (subprocess, sys, get_gmail_accounts)
+- Fixed ARCHITECTURE.md stale claim: "Six" → "Five" pragma:no cover guards
+
 ## [0.4.1] - 2026-02-27
 
 ### Added
