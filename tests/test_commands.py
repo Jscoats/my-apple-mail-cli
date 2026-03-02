@@ -149,15 +149,15 @@ def test_cmd_inbox_with_account_flag_scopes_to_single_account(monkeypatch, capsy
 
 
 def test_cmd_list_basic(monkeypatch, mock_args, capsys):
-    """Smoke test: cmd_list displays messages."""
+    """Smoke test: cmd_list displays messages in a bordered table."""
     from mxctl.commands.mail.messages import cmd_list
 
     mock_run = Mock(
         return_value=(
             f"123{FIELD_SEPARATOR}Test Subject{FIELD_SEPARATOR}sender@example.com{FIELD_SEPARATOR}"
-            f"Mon Feb 14 2026{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false\n"
+            f"Mon Feb 14 2026{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}snippet1\n"
             f"124{FIELD_SEPARATOR}Another{FIELD_SEPARATOR}other@example.com{FIELD_SEPARATOR}"
-            f"Tue Feb 15 2026{FIELD_SEPARATOR}false{FIELD_SEPARATOR}true\n"
+            f"Tue Feb 15 2026{FIELD_SEPARATOR}false{FIELD_SEPARATOR}true{FIELD_SEPARATOR}snippet2"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
@@ -167,8 +167,8 @@ def test_cmd_list_basic(monkeypatch, mock_args, capsys):
 
     captured = capsys.readouterr()
     assert "Messages in INBOX" in captured.out
-    assert "[1] Test Subject" in captured.out
-    assert "[2] Another" in captured.out
+    assert "Test Subject" in captured.out
+    assert "Another" in captured.out
     assert "UNREAD" in captured.out
     assert "FLAGGED" in captured.out
 
@@ -178,7 +178,7 @@ def test_cmd_list_json(monkeypatch, mock_args, capsys):
     from mxctl.commands.mail.messages import cmd_list
 
     mock_run = Mock(
-        return_value=f"123{FIELD_SEPARATOR}Test{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false\n"
+        return_value=f"123{FIELD_SEPARATOR}Test{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}snippet"
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
 
@@ -252,13 +252,13 @@ def test_cmd_read_json(monkeypatch, mock_args, capsys):
 
 
 def test_cmd_search_basic(monkeypatch, mock_args, capsys):
-    """Smoke test: cmd_search finds messages."""
+    """Smoke test: cmd_search finds messages in a bordered table."""
     from mxctl.commands.mail.messages import cmd_search
 
     mock_run = Mock(
         return_value=(
             f"123{FIELD_SEPARATOR}Test Subject{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}"
-            f"Mon Feb 14{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            f"Mon Feb 14{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud{FIELD_SEPARATOR}snippet"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
@@ -268,8 +268,8 @@ def test_cmd_search_basic(monkeypatch, mock_args, capsys):
 
     captured = capsys.readouterr()
     assert "Search results for 'test'" in captured.out
-    assert "[1] Test Subject" in captured.out
-    assert "Location: INBOX [iCloud]" in captured.out
+    assert "Test Subject" in captured.out
+    assert "INBOX [iCloud]" in captured.out
 
 
 def test_cmd_search_json(monkeypatch, mock_args, capsys):
@@ -279,7 +279,7 @@ def test_cmd_search_json(monkeypatch, mock_args, capsys):
     mock_run = Mock(
         return_value=(
             f"123{FIELD_SEPARATOR}Test{FIELD_SEPARATOR}sender@ex.com{FIELD_SEPARATOR}"
-            f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud{FIELD_SEPARATOR}snippet"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
@@ -1658,7 +1658,7 @@ def test_cmd_list_unread_filter(monkeypatch, mock_args, capsys):
 
     mock_run = Mock(
         return_value=(
-            f"10{FIELD_SEPARATOR}Unread Msg{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false\n"
+            f"10{FIELD_SEPARATOR}Unread Msg{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}snippet"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
@@ -1756,10 +1756,10 @@ def test_cmd_list_skips_blank_lines(monkeypatch, mock_args, capsys):
 
     mock_run = Mock(
         return_value=(
-            f"10{FIELD_SEPARATOR}Good{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false\n"
+            f"10{FIELD_SEPARATOR}Good{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}snip1\n"
             f"\n"
             f"   \n"
-            f"11{FIELD_SEPARATOR}Also Good{FIELD_SEPARATOR}t@x.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false\n"
+            f"11{FIELD_SEPARATOR}Also Good{FIELD_SEPARATOR}t@x.com{FIELD_SEPARATOR}Tue{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}snip2"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
@@ -1768,8 +1768,8 @@ def test_cmd_list_skips_blank_lines(monkeypatch, mock_args, capsys):
     cmd_list(args)
 
     captured = capsys.readouterr()
-    assert "[1] Good" in captured.out
-    assert "[2] Also Good" in captured.out
+    assert "Good" in captured.out
+    assert "Also Good" in captured.out
 
 
 def test_cmd_read_insufficient_parts_fallback(monkeypatch, mock_args, capsys):
@@ -1793,7 +1793,7 @@ def test_cmd_search_account_only_no_mailbox(monkeypatch, mock_args, capsys):
     mock_run = Mock(
         return_value=(
             f"50{FIELD_SEPARATOR}Found{FIELD_SEPARATOR}a@b.com{FIELD_SEPARATOR}"
-            f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud{FIELD_SEPARATOR}snippet"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
@@ -1819,13 +1819,13 @@ def test_cmd_search_no_account_no_mailbox_all_accounts(monkeypatch, capsys):
     mock_run = Mock(
         return_value=(
             f"60{FIELD_SEPARATOR}Global{FIELD_SEPARATOR}x@y.com{FIELD_SEPARATOR}"
-            f"Mon{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}Gmail\n"
+            f"Mon{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}Gmail{FIELD_SEPARATOR}snippet"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
     monkeypatch.setattr("mxctl.commands.mail.messages.resolve_account", lambda _: None)
 
-    args = Namespace(query="test", sender=False, account=None, mailbox=None, limit=25, json=False)
+    args = Namespace(query="test", sender=False, account=None, mailbox=None, limit=25, json=False, summary=False)
     cmd_search(args)
 
     script = mock_run.call_args[0][0]
@@ -1842,7 +1842,7 @@ def test_cmd_search_sender_flag(monkeypatch, mock_args, capsys):
     mock_run = Mock(
         return_value=(
             f"70{FIELD_SEPARATOR}Match{FIELD_SEPARATOR}alice@test.com{FIELD_SEPARATOR}"
-            f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud{FIELD_SEPARATOR}snippet"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
@@ -1913,11 +1913,11 @@ def test_cmd_search_skips_blank_lines(monkeypatch, mock_args, capsys):
     mock_run = Mock(
         return_value=(
             f"80{FIELD_SEPARATOR}Valid{FIELD_SEPARATOR}v@x.com{FIELD_SEPARATOR}"
-            f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            f"Mon{FIELD_SEPARATOR}true{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud{FIELD_SEPARATOR}snip1\n"
             f"\n"
             f"  \n"
             f"81{FIELD_SEPARATOR}Also Valid{FIELD_SEPARATOR}w@x.com{FIELD_SEPARATOR}"
-            f"Tue{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            f"Tue{FIELD_SEPARATOR}false{FIELD_SEPARATOR}false{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud{FIELD_SEPARATOR}snip2"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)
@@ -1926,18 +1926,18 @@ def test_cmd_search_skips_blank_lines(monkeypatch, mock_args, capsys):
     cmd_search(args)
 
     captured = capsys.readouterr()
-    assert "[1] Valid" in captured.out
-    assert "[2] Also Valid" in captured.out
+    assert "Valid" in captured.out
+    assert "Also Valid" in captured.out
 
 
 def test_cmd_search_unread_and_flagged_status(monkeypatch, mock_args, capsys):
-    """cmd_search shows UNREAD and FLAGGED status icons (lines 318, 320)."""
+    """cmd_search shows UNREAD and FLAGGED status in the Status column."""
     from mxctl.commands.mail.messages import cmd_search
 
     mock_run = Mock(
         return_value=(
             f"90{FIELD_SEPARATOR}Unread Flagged{FIELD_SEPARATOR}s@x.com{FIELD_SEPARATOR}"
-            f"Mon{FIELD_SEPARATOR}false{FIELD_SEPARATOR}true{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud\n"
+            f"Mon{FIELD_SEPARATOR}false{FIELD_SEPARATOR}true{FIELD_SEPARATOR}INBOX{FIELD_SEPARATOR}iCloud{FIELD_SEPARATOR}snippet"
         )
     )
     monkeypatch.setattr("mxctl.commands.mail.messages.run", mock_run)

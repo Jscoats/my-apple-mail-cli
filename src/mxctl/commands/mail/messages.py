@@ -1,6 +1,9 @@
 """Message listing and reading commands: list, read, search."""
 
+import json
+import ssl
 import sys
+import urllib.request
 from datetime import timedelta
 
 from mxctl.config import (
@@ -14,8 +17,80 @@ from mxctl.config import (
 )
 from mxctl.util.applescript import escape, run, validate_msg_id
 from mxctl.util.dates import parse_date, to_applescript_date
-from mxctl.util.formatting import format_output, truncate
-from mxctl.util.mail_helpers import parse_message_line, resolve_mailbox, resolve_message_context
+from mxctl.util.formatting import format_output, format_short_date, format_table, truncate
+from mxctl.util.mail_helpers import extract_display_name, parse_message_line, resolve_mailbox, resolve_message_context
+
+# ---------------------------------------------------------------------------
+# Column width caps for the bordered table output
+# ---------------------------------------------------------------------------
+
+_COL_WIDTHS_LIST = [3, 7, 25, 20, 8, 14, 35]  # #, ID, Subject, From, Date, Status, Preview
+_COL_WIDTHS_SEARCH = [3, 7, 22, 18, 8, 14, 22, 35]  # adds Location before Preview
+
+
+# ---------------------------------------------------------------------------
+# AI preview summariser (--summary flag)
+# ---------------------------------------------------------------------------
+
+
+def _ai_summarize_previews(messages: list[dict]) -> list[str]:
+    """Call the Anthropic API to generate a one-liner summary for each message preview.
+
+    Uses the same HTTPS pattern as the rest of mxctl (stdlib only, no httpx/requests).
+    Falls back to the raw snippet on any error.
+
+    Returns a list of summary strings in the same order as *messages*.
+    """
+    import os
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        # No key available — return raw snippets
+        return [truncate(m.get("preview", ""), 35) for m in messages]
+
+    lines = []
+    for m in messages:
+        subject = m.get("subject", "")
+        sender = m.get("sender", "")
+        preview = m.get("preview", "")
+        lines.append(f"Subject: {subject}\nFrom: {sender}\nPreview: {preview}")
+
+    prompt = (
+        "For each email below, write a single concise sentence (max 35 chars) summarising the key point. "
+        "Output ONLY the summaries, one per line, in the same order.\n\n" + "\n---\n".join(lines)
+    )
+
+    payload = json.dumps(
+        {
+            "model": "claude-haiku-4-5",
+            "max_tokens": 512,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+    ).encode()
+
+    try:
+        ctx = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
+        req = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+            body = json.loads(resp.read())
+        raw = body["content"][0]["text"].strip()
+        summaries = [s.strip() for s in raw.split("\n") if s.strip()]
+        # Pad / truncate to match message count
+        while len(summaries) < len(messages):
+            summaries.append("")
+        return [truncate(s, 35) for s in summaries[: len(messages)]]
+    except Exception:
+        return [truncate(m.get("preview", ""), 35) for m in messages]
+
 
 # ---------------------------------------------------------------------------
 # list
@@ -58,7 +133,16 @@ def get_messages(
         set output to ""
         repeat with i from 1 to actualLimit
             set m to item i of allMsgs
-            set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (read status of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & linefeed
+            set msgPreview to ""
+            try
+                set msgPreview to content of m
+                if length of msgPreview > 100 then
+                    set msgPreview to text 1 thru 100 of msgPreview
+                end if
+            on error
+                set msgPreview to ""
+            end try
+            set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (read status of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & "{FIELD_SEPARATOR}" & msgPreview & linefeed
         end repeat
         return output
     end tell
@@ -69,11 +153,16 @@ def get_messages(
     if not result.strip():
         return []
 
+    _list_fields = ["id", "subject", "sender", "date", "read", "flagged", "preview"]
     messages = []
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        msg = parse_message_line(line, ["id", "subject", "sender", "date", "read", "flagged"], FIELD_SEPARATOR)
+        # When the preview is empty the trailing FIELD_SEPARATOR gets stripped by
+        # run()'s stdout.strip(), leaving one fewer field. Pad it back so parse works.
+        if line.count(FIELD_SEPARATOR) == len(_list_fields) - 2:
+            line = line + FIELD_SEPARATOR
+        msg = parse_message_line(line, _list_fields, FIELD_SEPARATOR)
         if msg is not None:
             messages.append(msg)
 
@@ -87,6 +176,7 @@ def cmd_list(args) -> None:
     unread_only = getattr(args, "unread", False)
     after = getattr(args, "after", None)
     before = getattr(args, "before", None)
+    use_ai_summary = getattr(args, "summary", False)
 
     messages = get_messages(account, mailbox, limit=limit, unread_only=unread_only, after=after, before=before)
 
@@ -106,18 +196,44 @@ def cmd_list(args) -> None:
     for i, m in enumerate(messages, 1):
         m["alias"] = i
 
-    text = f"Messages in {mailbox} [{account}] (showing up to {limit}):"
-    for m in messages:
-        status_icons = []
+    use_json = getattr(args, "json", False)
+
+    if use_json:
+        format_output(args, "", json_data=messages)
+        return
+
+    # Build preview column values
+    if use_ai_summary:
+        previews = _ai_summarize_previews(messages)
+    else:
+        previews = [truncate(m.get("preview", ""), 35) for m in messages]
+
+    # Build table rows
+    headers = ["#", "ID", "Subject", "From", "Date", "Status", "Preview"]
+    rows = []
+    for m, preview in zip(messages, previews, strict=True):
+        status_parts = []
         if not m["read"]:
-            status_icons.append("UNREAD")
+            status_parts.append("UNREAD")
         if m["flagged"]:
-            status_icons.append("FLAGGED")
-        status_str = f" [{', '.join(status_icons)}]" if status_icons else ""
-        text += f"\n- [{m['alias']}] {truncate(m['subject'], 60)}{status_str}"
-        text += f"\n  From: {m['sender']}"
-        text += f"\n  Date: {m['date']}"
-    format_output(args, text, json_data=messages)
+            status_parts.append("FLAGGED")
+        status_str = ",".join(status_parts)
+        from_display = truncate(extract_display_name(m["sender"]) or m["sender"], 20)
+        rows.append(
+            [
+                str(m["alias"]),
+                str(m["id"]),
+                m["subject"],
+                from_display,
+                format_short_date(m["date"]),
+                status_str,
+                preview,
+            ]
+        )
+
+    header_line = f"Messages in {mailbox} [{account}] (showing up to {limit}):\n"
+    table = format_table(headers, rows, _COL_WIDTHS_LIST)
+    format_output(args, header_line + table, json_data=messages)
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +453,16 @@ def search_messages(
             set output to ""
             repeat with i from 1 to actualLimit
                 set m to item i of searchResults
-                set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (read status of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & "{FIELD_SEPARATOR}" & "{mb_escaped}" & "{FIELD_SEPARATOR}" & "{acct_escaped}" & linefeed
+                set msgPreview to ""
+                try
+                    set msgPreview to content of m
+                    if length of msgPreview > 100 then
+                        set msgPreview to text 1 thru 100 of msgPreview
+                    end if
+                on error
+                    set msgPreview to ""
+                end try
+                set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (read status of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & "{FIELD_SEPARATOR}" & "{mb_escaped}" & "{FIELD_SEPARATOR}" & "{acct_escaped}" & "{FIELD_SEPARATOR}" & msgPreview & linefeed
             end repeat
             return output
         end tell
@@ -355,7 +480,16 @@ def search_messages(
                 set searchResults to (every message of mb whose {field} contains "{query_escaped}")
                 repeat with m in searchResults
                     if totalFound >= {limit} then exit repeat
-                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (read status of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & "{FIELD_SEPARATOR}" & mbName & "{FIELD_SEPARATOR}" & "{acct_escaped}" & linefeed
+                    set msgPreview to ""
+                    try
+                        set msgPreview to content of m
+                        if length of msgPreview > 100 then
+                            set msgPreview to text 1 thru 100 of msgPreview
+                        end if
+                    on error
+                        set msgPreview to ""
+                    end try
+                    set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (read status of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & "{FIELD_SEPARATOR}" & mbName & "{FIELD_SEPARATOR}" & "{acct_escaped}" & "{FIELD_SEPARATOR}" & msgPreview & linefeed
                     set totalFound to totalFound + 1
                 end repeat
             end repeat
@@ -376,7 +510,16 @@ def search_messages(
                     set searchResults to (every message of mb whose {field} contains "{query_escaped}")
                     repeat with m in searchResults
                         if totalFound >= {limit} then exit repeat
-                        set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (read status of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & "{FIELD_SEPARATOR}" & mbName & "{FIELD_SEPARATOR}" & acctName & linefeed
+                        set msgPreview to ""
+                        try
+                            set msgPreview to content of m
+                            if length of msgPreview > 100 then
+                                set msgPreview to text 1 thru 100 of msgPreview
+                            end if
+                        on error
+                            set msgPreview to ""
+                        end try
+                        set output to output & (id of m) & "{FIELD_SEPARATOR}" & (subject of m) & "{FIELD_SEPARATOR}" & (sender of m) & "{FIELD_SEPARATOR}" & (date received of m) & "{FIELD_SEPARATOR}" & (read status of m) & "{FIELD_SEPARATOR}" & (flagged status of m) & "{FIELD_SEPARATOR}" & mbName & "{FIELD_SEPARATOR}" & acctName & "{FIELD_SEPARATOR}" & msgPreview & linefeed
                         set totalFound to totalFound + 1
                     end repeat
                 end repeat
@@ -390,15 +533,16 @@ def search_messages(
     if not result.strip():
         return []
 
+    _search_fields = ["id", "subject", "sender", "date", "read", "flagged", "mailbox", "account", "preview"]
     messages = []
     for line in result.strip().split("\n"):
         if not line.strip():
             continue
-        msg = parse_message_line(
-            line,
-            ["id", "subject", "sender", "date", "read", "flagged", "mailbox", "account"],
-            FIELD_SEPARATOR,
-        )
+        # When the preview is empty the trailing FIELD_SEPARATOR gets stripped by
+        # run()'s stdout.strip(), leaving one fewer field. Pad it back so parse works.
+        if line.count(FIELD_SEPARATOR) == len(_search_fields) - 2:
+            line = line + FIELD_SEPARATOR
+        msg = parse_message_line(line, _search_fields, FIELD_SEPARATOR)
         if msg is not None:
             messages.append(msg)
 
@@ -412,6 +556,7 @@ def cmd_search(args) -> None:
     account = resolve_account(getattr(args, "account", None))
     mailbox = getattr(args, "mailbox", None)
     limit = validate_limit(getattr(args, "limit", DEFAULT_MESSAGE_LIMIT))
+    use_ai_summary = getattr(args, "summary", False)
 
     if mailbox and account:
         mailbox = resolve_mailbox(account, mailbox)
@@ -431,19 +576,46 @@ def cmd_search(args) -> None:
     for i, m in enumerate(messages, 1):
         m["alias"] = i
 
-    text = f"Search results for '{query}' in {field} (up to {limit}):"
-    for m in messages:
-        status_icons = []
+    use_json = getattr(args, "json", False)
+
+    if use_json:
+        format_output(args, "", json_data=messages)
+        return
+
+    # Build preview column values
+    if use_ai_summary:
+        previews = _ai_summarize_previews(messages)
+    else:
+        previews = [truncate(m.get("preview", ""), 35) for m in messages]
+
+    # Build table rows — search includes a Location column
+    headers = ["#", "ID", "Subject", "From", "Date", "Status", "Location", "Preview"]
+    rows = []
+    for m, preview in zip(messages, previews, strict=True):
+        status_parts = []
         if not m["read"]:
-            status_icons.append("UNREAD")
+            status_parts.append("UNREAD")
         if m["flagged"]:
-            status_icons.append("FLAGGED")
-        status_str = f" [{', '.join(status_icons)}]" if status_icons else ""
-        text += f"\n- [{m['alias']}] {truncate(m['subject'], 50)}{status_str}"
-        text += f"\n  From: {m['sender']}"
-        text += f"\n  Date: {m['date']}"
-        text += f"\n  Location: {m['mailbox']} [{m['account']}]"
-    format_output(args, text, json_data=messages)
+            status_parts.append("FLAGGED")
+        status_str = ",".join(status_parts)
+        from_display = truncate(extract_display_name(m["sender"]) or m["sender"], 18)
+        location = truncate(f"{m['mailbox']} [{m['account']}]", 22)
+        rows.append(
+            [
+                str(m["alias"]),
+                str(m["id"]),
+                m["subject"],
+                from_display,
+                format_short_date(m["date"]),
+                status_str,
+                location,
+                preview,
+            ]
+        )
+
+    header_line = f"Search results for '{query}' in {field} (up to {limit}):\n"
+    table = format_table(headers, rows, _COL_WIDTHS_SEARCH)
+    format_output(args, header_line + table, json_data=messages)
 
 
 # ---------------------------------------------------------------------------
@@ -461,6 +633,7 @@ def register(subparsers) -> None:
     p.add_argument("--limit", type=int, default=DEFAULT_MESSAGE_LIMIT, help="Max messages to show")
     p.add_argument("--after", help="Filter messages after date (YYYY-MM-DD)")
     p.add_argument("--before", help="Filter messages before date (YYYY-MM-DD)")
+    p.add_argument("--summary", action="store_true", help="Use AI to generate one-liner previews")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_list)
 
@@ -480,5 +653,6 @@ def register(subparsers) -> None:
     p.add_argument("-a", "--account", help="Limit to specific account")
     p.add_argument("-m", "--mailbox", help="Limit to specific mailbox (requires -a)")
     p.add_argument("--limit", type=int, default=DEFAULT_MESSAGE_LIMIT, help="Max results")
+    p.add_argument("--summary", action="store_true", help="Use AI to generate one-liner previews")
     p.add_argument("--json", action="store_true", help="Output as JSON")
     p.set_defaults(func=cmd_search)
