@@ -1,8 +1,10 @@
 """Message listing and reading commands: list, read, search."""
 
+import sys
 from datetime import timedelta
 
 from mxctl.config import (
+    APPLESCRIPT_TIMEOUT_LONG,
     DEFAULT_BODY_LENGTH,
     DEFAULT_MESSAGE_LIMIT,
     FIELD_SEPARATOR,
@@ -219,6 +221,37 @@ def read_message(account: str, mailbox: str, message_id: int, body_limit: int = 
     }
 
 
+def find_message_account(message_id: int) -> tuple[str, str] | None:
+    """Scan all accounts and mailboxes to find which account/mailbox contains message_id.
+
+    Returns (account_name, mailbox_name) tuple on success, or None if not found.
+    Used as a fallback when the default/specified account doesn't have the message.
+    """
+    script = f"""
+    tell application "Mail"
+        repeat with acct in (every account)
+            if enabled of acct then
+                set acctName to name of acct
+                repeat with mbox in (mailboxes of acct)
+                    try
+                        set theMsg to first message of mbox whose id is {message_id}
+                        return acctName & "{FIELD_SEPARATOR}" & (name of mbox)
+                    end try
+                end repeat
+            end if
+        end repeat
+        return ""
+    end tell
+    """
+    result = run(script, timeout=APPLESCRIPT_TIMEOUT_LONG)
+    if not result.strip():
+        return None
+    parts = result.strip().split(FIELD_SEPARATOR)
+    if len(parts) < 2:
+        return None
+    return parts[0], parts[1]
+
+
 def cmd_read(args) -> None:
     """Read full message details including headers and body."""
     account, mailbox, _acct_escaped, _mb_escaped = resolve_message_context(args)
@@ -227,6 +260,21 @@ def cmd_read(args) -> None:
     body_limit = DEFAULT_BODY_LENGTH if not short else 500
 
     data = read_message(account, mailbox, message_id, body_limit=body_limit)
+
+    # If not found in the specified/default account, scan all accounts.
+    # Only auto-scan when the user did NOT explicitly pass -a ACCOUNT.
+    if not data and not getattr(args, "account", None):
+        found = find_message_account(message_id)
+        if found:
+            alt_account, alt_mailbox = found
+            print(
+                f"Note: Message {message_id} not found in {account}. Found in {alt_account} [{alt_mailbox}].",
+                file=sys.stderr,
+            )
+            data = read_message(alt_account, alt_mailbox, message_id, body_limit=body_limit)
+            if data:
+                account = alt_account
+                mailbox = alt_mailbox
 
     if not data:
         format_output(args, f"Message {message_id} not found in {mailbox} [{account}].")
