@@ -13,7 +13,7 @@ from mxctl.config import (
     file_lock,
 )
 from mxctl.util.applescript import escape, run
-from mxctl.util.formatting import die, format_output
+from mxctl.util.formatting import die, format_output, format_table, truncate
 
 MAX_UNDO_OPERATIONS = 10
 UNDO_MAX_AGE_MINUTES = 30
@@ -297,23 +297,18 @@ def cmd_undo_list(args) -> None:
         format_output(args, "No recent batch operations to undo.", json_data={"operations": []})
         return
 
-    text = f"Recent batch operations ({len(operations)}):"
+    headers = ["#", "Operation", "Count", "Date"]
+    col_widths = [3, 40, 5, 16]
+    rows = []
     for i, op in enumerate(reversed(operations), 1):
         is_fence = op.get("type") == "fence"
-        prefix = "[no undo] " if is_fence else ""
-        ts = op.get("timestamp", "")
-        text += f"\n  {i}. {prefix}{op['operation']} — {ts}"
-        if not is_fence:
-            if op.get("sender"):
-                text += f" from {op['sender']}"
-            if op.get("source_mailbox"):
-                text += f" from {op['source_mailbox']}"
-            if op.get("dest_mailbox"):
-                text += f" to {op['dest_mailbox']}"
-            if op.get("older_than_days"):
-                text += f" (older than {op['older_than_days']} days)"
-            text += f" ({len(op.get('message_ids', []))} messages)"
+        op_label = ("[no undo] " if is_fence else "") + op.get("operation", "")
+        count = "" if is_fence else str(len(op.get("message_ids", [])))
+        ts = truncate(op.get("timestamp", ""), 16)
+        rows.append([str(i), truncate(op_label, 40), count, ts])
 
+    text = f"Recent batch operations ({len(operations)}):\n"
+    text += format_table(headers, rows, col_widths)
     format_output(args, text, json_data={"operations": list(reversed(operations))})
 
 

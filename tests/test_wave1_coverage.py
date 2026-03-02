@@ -643,9 +643,9 @@ class TestCmdTopSendersEdgeCases:
 
         captured = capsys.readouterr()
         # At most 3 numbered entries
-        assert "  1." in captured.out
-        assert "  3." in captured.out
-        assert "  4." not in captured.out
+        assert "a@x.com" in captured.out
+        assert "c@x.com" in captured.out
+        assert "d@x.com" not in captured.out
 
 
 # ===========================================================================

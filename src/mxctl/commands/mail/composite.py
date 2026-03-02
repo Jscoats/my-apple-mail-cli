@@ -15,7 +15,7 @@ from mxctl.config import (
     save_message_aliases,
 )
 from mxctl.util.applescript import escape, run, validate_msg_id
-from mxctl.util.formatting import die, format_output, truncate
+from mxctl.util.formatting import die, format_output, format_short_date, format_table, truncate
 from mxctl.util.mail_helpers import extract_email, normalize_subject, parse_message_line
 
 # ---------------------------------------------------------------------------
@@ -289,10 +289,20 @@ def cmd_thread(args) -> None:
     for i, m in enumerate(messages, 1):
         m["alias"] = i
 
-    text = f"Thread: {thread_subject} ({len(messages)} messages):"
-    for m in messages:
-        text += f"\n  [{m['alias']}] {truncate(m['subject'], 50)}"
-        text += f"\n    From: {m['sender']}  Date: {m['date']}"
+    headers = ["#", "ID", "From", "Date", "Subject"]
+    col_widths = [3, 6, 28, 6, 45]
+    rows = [
+        [
+            str(m["alias"]),
+            str(m["id"]),
+            truncate(m["sender"], 28),
+            format_short_date(str(m["date"])),
+            truncate(m["subject"], 45),
+        ]
+        for m in messages
+    ]
+    text = f"Thread: {thread_subject} ({len(messages)} messages):\n"
+    text += format_table(headers, rows, col_widths)
     format_output(args, text, json_data=messages)
 
 

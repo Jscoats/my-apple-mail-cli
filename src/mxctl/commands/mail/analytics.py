@@ -17,7 +17,7 @@ from mxctl.config import (
 )
 from mxctl.util.applescript import escape, run
 from mxctl.util.dates import to_applescript_date
-from mxctl.util.formatting import die, format_output, truncate
+from mxctl.util.formatting import die, format_output, format_short_date, format_table
 from mxctl.util.mail_helpers import extract_email, parse_message_line
 
 # ---------------------------------------------------------------------------
@@ -76,9 +76,11 @@ def cmd_top_senders(args) -> None:
         format_output(args, f"No messages found in the last {days} days.", json_data={"days": days, "senders": []})
         return
 
-    text = f"Top {limit} senders (last {days} days):"
-    for i, entry in enumerate(top, 1):
-        text += f"\n  {i}. {truncate(entry['sender'], 50)} — {entry['count']} messages"
+    headers = ["Rank", "Sender", "Count"]
+    rows = [[str(i), entry["sender"], str(entry["count"])] for i, entry in enumerate(top, 1)]
+    col_widths = [4, 50, 5]
+    table_str = format_table(headers, rows, col_widths)
+    text = f"Top {limit} senders (last {days} days):\n{table_str}"
     format_output(args, text, json_data=top)
 
 
@@ -155,13 +157,24 @@ def cmd_digest(args) -> None:
 
     total = sum(len(msgs) for msgs in groups.values())
     text = f"Unread Digest ({total} messages, {len(groups)} groups):"
+    headers = ["ID", "Subject", "From", "Date", "Status"]
+    col_widths = [8, 40, 30, 6, 6]
     for domain, msgs in sorted(groups.items(), key=lambda x: -len(x[1])):
-        text += f"\n\n  {domain} ({len(msgs)}):"
-        for m in msgs[:5]:
-            text += f"\n    [{m['alias']}] {truncate(m['subject'], 45)}"
-            text += f"\n      From: {truncate(m['sender'], 40)}"
+        display_msgs = msgs[:5]
+        rows = [
+            [
+                str(m["id"]),
+                m["subject"],
+                m["sender"],
+                format_short_date(m["date"]),
+                "unread",
+            ]
+            for m in display_msgs
+        ]
+        table_str = format_table(headers, rows, col_widths)
+        text += f"\n\n{domain} ({len(msgs)}):\n{table_str}"
         if len(msgs) > 5:
-            text += f"\n    ... and {len(msgs) - 5} more"
+            text += f"\n  ... and {len(msgs) - 5} more"
     format_output(args, text, json_data=groups)
 
 
@@ -295,13 +308,24 @@ def cmd_stats(args) -> None:
             return
 
         scope_label = f"Account: {account}" if explicit_account else "All Accounts"
-        text = f"{scope_label}\n"
-        text += f"Total: {data['total_messages']} messages, {data['total_unread']} unread\n"
-        text += f"\nMailboxes ({len(mailboxes)}):"
-        for mb in mailboxes:
-            acct_prefix = "" if explicit_account else f"[{mb['account']}] "
-            text += f"\n  {acct_prefix}{mb['name']}: {mb['total']} messages, {mb['unread']} unread"
+        summary_headers = ["Stat", "Value"]
+        summary_rows = [
+            ["Total Messages", str(data["total_messages"])],
+            ["Total Unread", str(data["total_unread"])],
+        ]
+        summary_table = format_table(summary_headers, summary_rows, [16, 12])
 
+        if explicit_account:
+            mb_headers = ["Mailbox", "Total", "Unread"]
+            mb_rows = [[mb["name"], str(mb["total"]), str(mb["unread"])] for mb in mailboxes]
+            mb_col_widths = [30, 7, 7]
+        else:
+            mb_headers = ["Account", "Mailbox", "Total", "Unread"]
+            mb_rows = [[mb["account"], mb["name"], str(mb["total"]), str(mb["unread"])] for mb in mailboxes]
+            mb_col_widths = [20, 25, 7, 7]
+        mb_table = format_table(mb_headers, mb_rows, mb_col_widths)
+
+        text = f"{scope_label}\n{summary_table}\n\nMailboxes ({len(mailboxes)}):\n{mb_table}"
         format_output(args, text, json_data=data)
     else:
         # Single mailbox stats (existing behavior)
@@ -310,11 +334,14 @@ def cmd_stats(args) -> None:
         mailbox = getattr(args, "mailbox", None) or DEFAULT_MAILBOX
 
         data = get_stats(show_all=False, account=account, mailbox=mailbox)
-        format_output(
-            args,
-            f"{mailbox} [{account}]: {data['total']} messages, {data['unread']} unread",
-            json_data=data,
-        )
+        headers = ["Stat", "Value"]
+        rows = [
+            ["Mailbox", f"{mailbox} [{account}]"],
+            ["Total Messages", str(data["total"])],
+            ["Unread", str(data["unread"])],
+        ]
+        table_str = format_table(headers, rows, [16, 35])
+        format_output(args, table_str, json_data=data)
 
 
 # ---------------------------------------------------------------------------
@@ -398,12 +425,20 @@ def cmd_show_flagged(args) -> None:
         m["alias"] = i
 
     scope = f" in account '{account}'" if account else " across all accounts"
-    text = f"Flagged messages{scope} (showing up to {limit}):"
-    for m in messages:
-        text += f"\n- [{m['alias']}] {truncate(m['subject'], 60)}"
-        text += f"\n  From: {m['sender']}"
-        text += f"\n  Date: {m['date']}"
-        text += f"\n  Location: {m['mailbox']} [{m['account']}]"
+    headers = ["#", "ID", "Subject", "From", "Date"]
+    rows = [
+        [
+            str(m["alias"]),
+            str(m["id"]),
+            m["subject"],
+            m["sender"],
+            format_short_date(m["date"]),
+        ]
+        for m in messages
+    ]
+    col_widths = [3, 8, 45, 35, 6]
+    table_str = format_table(headers, rows, col_widths)
+    text = f"Flagged messages{scope} (showing up to {limit}):\n{table_str}"
     format_output(args, text, json_data=messages)
 
 

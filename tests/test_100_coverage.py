@@ -1366,8 +1366,10 @@ class TestSystemMissingLines:
 
         cmd_rules(_args(action=None, rule_name=None))
         out = capsys.readouterr().out
-        assert "[ON] My Rule" in out
-        assert "[OFF] Other Rule" in out
+        assert "My Rule" in out
+        assert "ON" in out
+        assert "Other Rule" in out
+        assert "OFF" in out
 
 
 # ===========================================================================

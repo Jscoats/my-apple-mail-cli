@@ -76,7 +76,7 @@ class TestTriageCategorizationLogic:
         cmd_triage(args)
 
         out = capsys.readouterr().out
-        assert "NOTIFICATIONS (1):" in out
+        assert "[NOTIFICATIONS]" in out
         assert "PEOPLE" not in out
 
     def test_cmd_triage_categorizes_display_name_noreply_as_notification(self, monkeypatch, capsys):
@@ -100,7 +100,7 @@ class TestTriageCategorizationLogic:
         cmd_triage(args)
 
         out = capsys.readouterr().out
-        assert "NOTIFICATIONS (1):" in out
+        assert "[NOTIFICATIONS]" in out
         assert "PEOPLE" not in out
 
 
@@ -295,7 +295,7 @@ class TestCmdSummary:
         out = capsys.readouterr().out
         # Only the valid message should be counted
         assert "1 unread:" in out
-        assert "[1]" in out
+        assert "Good Subject" in out
 
     def test_summary_json_contains_all_fields(self, monkeypatch, capsys):
         """cmd_summary JSON output includes account, id, subject, sender, and date fields."""
@@ -349,7 +349,8 @@ class TestCmdTriage:
         cmd_triage(args)
 
         out = capsys.readouterr().out
-        assert "FLAGGED (2):" in out
+        assert "[FLAGGED]" in out
+        assert "2 messages" in out
         assert "PEOPLE" not in out
         assert "NOTIFICATIONS" not in out
 
@@ -460,8 +461,8 @@ class TestCmdSummaryBlankLineSkip:
 
         out = capsys.readouterr().out
         assert "2 unread:" in out
-        assert "[1]" in out
-        assert "[2]" in out
+        assert "First" in out
+        assert "Second" in out
 
 
 # ===========================================================================

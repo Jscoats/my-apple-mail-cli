@@ -6,7 +6,7 @@ from mxctl.config import (
     resolve_account,
 )
 from mxctl.util.applescript import escape, run, validate_msg_id
-from mxctl.util.formatting import die, format_output, truncate
+from mxctl.util.formatting import die, format_output, format_table, truncate
 from mxctl.util.mail_helpers import parse_email_headers
 
 # ---------------------------------------------------------------------------
@@ -196,10 +196,11 @@ def _list_rules(args) -> None:
         format_output(args, "No mail rules found.")
         return
 
-    text = "Mail Rules:"
-    for rule in rules:
-        status = "ON" if rule["enabled"] else "OFF"
-        text += f"\n  [{status}] {rule['name']}"
+    headers = ["#", "Rule Name", "Enabled"]
+    col_widths = [3, 45, 7]
+    rows = [[str(i), rule["name"], "ON" if rule["enabled"] else "OFF"] for i, rule in enumerate(rules, 1)]
+    text = "Mail Rules:\n"
+    text += format_table(headers, rows, col_widths)
     format_output(args, text, json_data=rules)
 
 

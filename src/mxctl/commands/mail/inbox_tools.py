@@ -16,7 +16,7 @@ from mxctl.config import (
 from mxctl.util.applescript import escape, run
 from mxctl.util.applescript_templates import mailbox_iterator
 from mxctl.util.dates import to_applescript_date
-from mxctl.util.formatting import format_output, truncate
+from mxctl.util.formatting import format_output, format_short_date, format_table, truncate
 from mxctl.util.mail_helpers import extract_display_name, extract_email, parse_message_line
 
 # ---------------------------------------------------------------------------
@@ -221,12 +221,24 @@ def cmd_process_inbox(args) -> None:
 
     text = f"Inbox Processing Plan ({total} unread):"
 
+    def _category_table(messages: list, limit: int = 5) -> str:
+        headers = ["ID", "Subject", "From", "Date"]
+        col_widths = [6, 45, 25, 6]
+        rows = [
+            [
+                str(m["alias"]),
+                truncate(m["subject"], 45),
+                truncate(extract_display_name(m["sender"]), 25),
+                format_short_date(str(m["date"])),
+            ]
+            for m in messages[:limit]
+        ]
+        return format_table(headers, rows, col_widths)
+
     # Suggest actions for each category
     if flagged:
-        text += f"\n\nFLAGGED ({len(flagged)}) — High priority:"
-        for m in flagged[:5]:
-            sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+        text += f"\n\nFLAGGED ({len(flagged)}) — High priority:\n"
+        text += _category_table(flagged)
         if len(flagged) > 5:
             text += f"\n  ... and {len(flagged) - 5} more"
         text += "\n\nSuggested commands:"
@@ -234,10 +246,8 @@ def cmd_process_inbox(args) -> None:
         text += f'\n  mxctl to-todoist <ID> -a "{flagged[0]["account"]}" --priority 4'
 
     if people:
-        text += f"\n\nPEOPLE ({len(people)}) — Requires attention:"
-        for m in people[:5]:
-            sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+        text += f"\n\nPEOPLE ({len(people)}) — Requires attention:\n"
+        text += _category_table(people)
         if len(people) > 5:
             text += f"\n  ... and {len(people) - 5} more"
         text += "\n\nSuggested commands:"
@@ -245,10 +255,8 @@ def cmd_process_inbox(args) -> None:
         text += f'\n  mxctl mark-read <ID> -a "{people[0]["account"]}"'
 
     if notifications:
-        text += f"\n\nNOTIFICATIONS ({len(notifications)}) — Bulk actions:"
-        for m in notifications[:5]:
-            sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+        text += f"\n\nNOTIFICATIONS ({len(notifications)}) — Bulk actions:\n"
+        text += _category_table(notifications)
         if len(notifications) > 5:
             text += f"\n  ... and {len(notifications) - 5} more"
         text += "\n\nSuggested commands:"
@@ -328,16 +336,12 @@ def cmd_clean_newsletters(args) -> None:
 
     # Build output
     scope = f" in {mailbox} [{account}]" if account else " across all accounts"
-    text = f"Identified {len(newsletters)} newsletter senders{scope} (from {limit} recent messages):"
+    text = f"Identified {len(newsletters)} newsletter senders{scope} (from {limit} recent messages):\n"
 
-    for nl in newsletters:
-        text += f"\n\n  {nl['sender']}"
-        text += f"\n    Total: {nl['total_messages']} messages ({nl['unread_messages']} unread)"
-
-        # Suggest cleanup command
-        acct_flag = f'-a "{account}"' if account else ""
-        cleanup_cmd = f'mxctl batch-move --from-sender "{nl["sender"]}" --to-mailbox "Newsletters" {acct_flag}'
-        text += f"\n    Cleanup: {cleanup_cmd}"
+    headers = ["#", "Sender", "Count"]
+    col_widths = [3, 45, 7]
+    rows = [[str(i), nl["sender"], str(nl["total_messages"])] for i, nl in enumerate(newsletters, 1)]
+    text += format_table(headers, rows, col_widths)
 
     format_output(args, text, json_data=data)
 
@@ -463,6 +467,20 @@ def cmd_weekly_review(args) -> None:
     for i, m in enumerate(all_messages, 1):
         m["alias"] = i
 
+    def _review_table(messages: list, limit: int = 10) -> str:
+        headers = ["ID", "Subject", "From", "Date"]
+        col_widths = [6, 45, 25, 6]
+        rows = [
+            [
+                str(m["alias"]),
+                truncate(m["subject"], 45),
+                truncate(m["sender"], 25),
+                format_short_date(str(m["date"])),
+            ]
+            for m in messages[:limit]
+        ]
+        return format_table(headers, rows, col_widths)
+
     # Build report
     scope = f" for account '{account}'" if account else " across all accounts"
     text = f"Weekly Review{scope} (last {days} days):"
@@ -470,9 +488,8 @@ def cmd_weekly_review(args) -> None:
     # Section 1: Flagged messages
     text += f"\n\nFlagged Messages ({len(flagged_messages)}):"
     if flagged_messages:
-        for msg in flagged_messages[:10]:  # Show up to 10
-            text += f"\n  [{msg['alias']}] {truncate(msg['subject'], 60)}"
-            text += f"\n      From: {truncate(msg['sender'], 50)}"
+        text += "\n"
+        text += _review_table(flagged_messages)
         if len(flagged_messages) > 10:
             text += f"\n  ... and {len(flagged_messages) - 10} more"
     else:
@@ -481,9 +498,8 @@ def cmd_weekly_review(args) -> None:
     # Section 2: Messages with attachments
     text += f"\n\nMessages with Attachments ({len(attachment_messages)}):"
     if attachment_messages:
-        for msg in attachment_messages[:10]:
-            text += f"\n  [{msg['alias']}] {truncate(msg['subject'], 60)} ({msg['attachment_count']} attachments)"
-            text += f"\n      From: {truncate(msg['sender'], 50)}"
+        text += "\n"
+        text += _review_table(attachment_messages)
         if len(attachment_messages) > 10:
             text += f"\n  ... and {len(attachment_messages) - 10} more"
     else:
@@ -492,9 +508,8 @@ def cmd_weekly_review(args) -> None:
     # Section 3: Unreplied from people
     text += f"\n\nUnreplied from People ({len(unreplied_messages)}):"
     if unreplied_messages:
-        for msg in unreplied_messages[:10]:
-            text += f"\n  [{msg['alias']}] {truncate(msg['subject'], 60)}"
-            text += f"\n      From: {truncate(msg['sender'], 50)}"
+        text += "\n"
+        text += _review_table(unreplied_messages)
         if len(unreplied_messages) > 10:
             text += f"\n  ... and {len(unreplied_messages) - 10} more"
     else:

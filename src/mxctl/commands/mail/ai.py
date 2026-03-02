@@ -15,7 +15,7 @@ from mxctl.config import (
 )
 from mxctl.util.applescript import escape, run, validate_msg_id
 from mxctl.util.applescript_templates import inbox_iterator_all_accounts
-from mxctl.util.formatting import die, format_output, truncate
+from mxctl.util.formatting import die, format_output, format_short_date, format_table, truncate
 from mxctl.util.mail_helpers import extract_display_name, extract_email, normalize_subject, parse_message_line
 
 # ---------------------------------------------------------------------------
@@ -53,11 +53,21 @@ def cmd_summary(args) -> None:
     for i, m in enumerate(messages, 1):
         m["alias"] = i
 
-    # Ultra-concise format for AI consumption
-    text = f"{len(messages)} unread:"
+    headers = ["#", "ID", "Subject", "From", "Date"]
+    rows = []
     for m in messages:
         sender = extract_display_name(m["sender"])
-        text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 55)}"
+        rows.append(
+            [
+                str(m["alias"]),
+                str(m["id"]),
+                truncate(m["subject"], 40),
+                truncate(sender, 22),
+                format_short_date(m["date"]),
+            ]
+        )
+    col_widths = [3, 7, 40, 22, 7]
+    text = f"{len(messages)} unread:\n" + format_table(headers, rows, col_widths)
     format_output(args, text, json_data=messages)
 
 
@@ -119,23 +129,35 @@ def cmd_triage(args) -> None:
     total = len(flagged) + len(people) + len(notifications)
     text = f"Triage ({total} unread):"
 
-    if flagged:
-        text += f"\n\nFLAGGED ({len(flagged)}):"
-        for m in flagged:
+    triage_headers = ["#", "ID", "Subject", "From", "Date"]
+    triage_col_widths = [3, 7, 38, 22, 7]
+
+    def _triage_rows(msgs: list) -> list:
+        rows = []
+        for m in msgs:
             sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+            rows.append(
+                [
+                    str(m["alias"]),
+                    str(m["id"]),
+                    truncate(m["subject"], 38),
+                    truncate(sender, 22),
+                    format_short_date(m["date"]),
+                ]
+            )
+        return rows
+
+    if flagged:
+        text += f"\n\n[FLAGGED] ({len(flagged)} messages):\n"
+        text += format_table(triage_headers, _triage_rows(flagged), triage_col_widths)
 
     if people:
-        text += f"\n\nPEOPLE ({len(people)}):"
-        for m in people:
-            sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+        text += f"\n\n[PEOPLE] ({len(people)} messages):\n"
+        text += format_table(triage_headers, _triage_rows(people), triage_col_widths)
 
     if notifications:
-        text += f"\n\nNOTIFICATIONS ({len(notifications)}):"
-        for m in notifications:
-            sender = extract_display_name(m["sender"])
-            text += f"\n  [{m['alias']}] {truncate(sender, 20)}: {truncate(m['subject'], 50)}"
+        text += f"\n\n[NOTIFICATIONS] ({len(notifications)} messages):\n"
+        text += format_table(triage_headers, _triage_rows(notifications), triage_col_widths)
 
     format_output(args, text, json_data={"flagged": flagged, "people": people, "notifications": notifications})
 
@@ -279,9 +301,22 @@ def cmd_context(args) -> None:
 
     text = f"=== Message ===\nFrom: {sender}\nTo: {to_list}\nDate: {date}\nSubject: {subject}\n\n{content}"
     if thread_entries:
-        text += "\n\n=== Thread History ==="
-        for t in thread_entries:
-            text += f"\n\n--- [{t['id']}] {t['subject']} ---\nFrom: {t['from']}  Date: {t['date']}\n{t['body']}"
+        text += "\n\n=== Thread History ===\n"
+        thread_headers = ["#", "From", "Date", "Snippet"]
+        thread_col_widths = [3, 25, 7, 60]
+        thread_rows = []
+        for idx, t in enumerate(thread_entries, 1):
+            from_name = extract_display_name(t["from"])
+            snippet = truncate(t["body"].replace("\n", " ").strip(), 60)
+            thread_rows.append(
+                [
+                    str(idx),
+                    truncate(from_name, 25),
+                    format_short_date(t["date"]),
+                    snippet,
+                ]
+            )
+        text += format_table(thread_headers, thread_rows, thread_col_widths)
 
     format_output(args, text, json_data=data)
 
@@ -383,13 +418,28 @@ def cmd_find_related(args) -> None:
     # Use the resolved query for display (first thread key is closest to it)
     display_query = query if not query.isdigit() else next(iter(threads))
     text = f"Related messages for '{display_query}' ({len(threads)} conversations):"
+
+    related_headers = ["ID", "Subject", "From", "Date"]
+    related_col_widths = [7, 38, 22, 7]
+
     for thread_subject, msgs in sorted(threads.items(), key=lambda x: -len(x[1])):
-        text += f"\n\n  {thread_subject} ({len(msgs)} messages):"
-        for m in msgs[:5]:
+        display_msgs = msgs[:5]
+        text += f"\n\n{thread_subject} ({len(msgs)} messages):\n"
+        rows = []
+        for m in display_msgs:
             sender = extract_display_name(m["sender"])
-            text += f"\n    [{m['alias']}] {truncate(sender, 20)} — {m['date']}"
+            rows.append(
+                [
+                    str(m["id"]),
+                    truncate(m["subject"], 38),
+                    truncate(sender, 22),
+                    format_short_date(m["date"]),
+                ]
+            )
+        text += format_table(related_headers, rows, related_col_widths)
         if len(msgs) > 5:
-            text += f"\n    ... and {len(msgs) - 5} more"
+            text += f"\n  ... and {len(msgs) - 5} more"
+
     format_output(args, text, json_data=threads)
 
 

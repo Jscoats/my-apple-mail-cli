@@ -4,7 +4,8 @@ import os
 
 from mxctl.config import CONFIG_FILE, FIELD_SEPARATOR, resolve_account, save_message_aliases
 from mxctl.util.applescript import escape, run
-from mxctl.util.formatting import format_output, truncate
+from mxctl.util.formatting import format_output, format_short_date, format_table, truncate
+from mxctl.util.mail_helpers import extract_display_name
 
 # ---------------------------------------------------------------------------
 # inbox
@@ -144,21 +145,37 @@ def cmd_inbox(args) -> None:
             alias_num += 1
             msg["alias"] = alias_num
 
-    # Build text from parsed data
-    text = "Inbox Summary\n" + "=" * 50
-    total_unread = 0
+    # Build summary table: one row per account
+    total_unread = sum(a["unread"] for a in accounts)
+    summary_headers = ["Account", "Unread", "Total"]
+    summary_rows = [[a["account"], str(a["unread"]), str(a["total"])] for a in accounts]
+    summary_table = format_table(summary_headers, summary_rows, [25, 8, 8])
+
+    parts = ["Inbox Summary\n" + summary_table]
+    parts.append(f"\nTotal unread: {total_unread}")
+
+    # Per-account recent-message mini-tables (only for accounts with unread)
+    msg_headers = ["#", "ID", "Subject", "From", "Date", "Preview"]
+    msg_col_widths = [3, 7, 28, 22, 8, 35]
     for acct_data in accounts:
-        total_unread += acct_data["unread"]
-        text += f"\n\n{acct_data['account']}:"
-        text += f"\n  Unread: {acct_data['unread']} / Total: {acct_data['total']}"
-        if acct_data["unread"] > 0:
-            text += "\n  Recent unread:"
+        if acct_data["unread"] > 0 and acct_data["recent_unread"]:
+            rows = []
             for msg in acct_data["recent_unread"]:
-                text += f"\n    [{msg['alias']}] {truncate(msg['subject'], 45)}"
-                text += f"\n      From: {msg['sender']}"
-    text += f"\n\n{'=' * 50}"
-    text += f"\nTotal unread across all accounts: {total_unread}"
-    format_output(args, text, json_data=accounts)
+                from_display = truncate(extract_display_name(msg["sender"]) or msg["sender"], 22)
+                rows.append(
+                    [
+                        str(msg["alias"]),
+                        str(msg["id"]),
+                        msg["subject"],
+                        from_display,
+                        format_short_date(msg["date"]),
+                        truncate(msg.get("preview", ""), 35),
+                    ]
+                )
+            mini_table = format_table(msg_headers, rows, msg_col_widths)
+            parts.append(f"\n{acct_data['account']} — recent unread:\n{mini_table}")
+
+    format_output(args, "\n".join(parts), json_data=accounts)
 
 
 # ---------------------------------------------------------------------------
@@ -213,12 +230,19 @@ def cmd_accounts(args) -> None:
         format_output(args, "No mail accounts found.")
         return
 
-    # Build text from parsed data
-    text = "Mail Accounts:"
-    for acct in accounts:
-        status = "enabled" if acct["enabled"] else "disabled"
-        text += f"\n- {acct['name']}\n  Email: {acct['email']}\n  Name: {acct['full_name']}\n  Status: {status}"
-    format_output(args, text, json_data=accounts)
+    # Build bordered table
+    headers = ["Account", "Email", "Enabled"]
+    rows = [
+        [
+            acct["name"],
+            acct["email"],
+            "Yes" if acct["enabled"] else "No",
+        ]
+        for acct in accounts
+    ]
+    col_widths = [20, 35, 8]
+    table = format_table(headers, rows, col_widths)
+    format_output(args, "Mail Accounts:\n" + table, json_data=accounts)
 
 
 # ---------------------------------------------------------------------------
@@ -293,16 +317,18 @@ def cmd_mailboxes(args) -> None:
         format_output(args, msg)
         return
 
-    # Build text from parsed data
-    header = f"Mailboxes in {account}:" if account else "All Mailboxes:"
-    text = header
-    for mb in mailboxes:
-        unread_str = f" ({mb['unread']} unread)" if mb["unread"] > 0 else ""
-        if account:
-            text += f"\n- {mb['name']}{unread_str}"
-        else:
-            text += f"\n- {mb['name']}{unread_str} [{mb['account']}]"
-    format_output(args, text, json_data=mailboxes)
+    # Build bordered table
+    header_line = f"Mailboxes in {account}:\n" if account else "All Mailboxes:\n"
+    if account:
+        headers = ["Mailbox", "Unread"]
+        rows = [[mb["name"], str(mb["unread"])] for mb in mailboxes]
+        col_widths = [30, 8]
+    else:
+        headers = ["Account", "Mailbox", "Unread"]
+        rows = [[mb["account"], mb["name"], str(mb["unread"])] for mb in mailboxes]
+        col_widths = [20, 30, 8]
+    table = format_table(headers, rows, col_widths)
+    format_output(args, header_line + table, json_data=mailboxes)
 
 
 # ---------------------------------------------------------------------------

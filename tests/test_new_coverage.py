@@ -698,7 +698,7 @@ class TestWeeklyReview:
 
         out = capsys.readouterr().out
         assert "Budget Q1" in out
-        assert "3 attachments" in out
+        assert "finance@corp.com" in out
 
     @patch("mxctl.commands.mail.inbox_tools.run")
     def test_unreplied_skips_noreply(self, mock_run, capsys, mock_args):

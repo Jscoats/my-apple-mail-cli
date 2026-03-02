@@ -30,10 +30,16 @@ class TestEnhancedStats:
 
         captured = capsys.readouterr()
         assert "Account: iCloud" in captured.out
-        assert "Total: 150 messages, 25 unread" in captured.out
-        assert "INBOX: 100 messages, 20 unread" in captured.out
-        assert "Sent Messages: 30 messages, 0 unread" in captured.out
-        assert "Archive: 20 messages, 5 unread" in captured.out
+        assert "Total Messages" in captured.out
+        assert "│ 150" in captured.out
+        assert "│ 25" in captured.out
+        assert "INBOX" in captured.out
+        assert "│ 100" in captured.out
+        assert "│ 20" in captured.out
+        assert "Sent Messages" in captured.out
+        assert "│ 30" in captured.out
+        assert "Archive" in captured.out
+        assert "│ 5" in captured.out
 
     @patch("mxctl.commands.mail.analytics.resolve_account", return_value=None)
     @patch("mxctl.commands.mail.analytics.run")
@@ -51,9 +57,12 @@ class TestEnhancedStats:
 
         captured = capsys.readouterr()
         assert "All Accounts" in captured.out
-        assert "Total: 250 messages, 30 unread" in captured.out
-        assert "[iCloud] INBOX" in captured.out
-        assert "[Gmail] INBOX" in captured.out
+        assert "Total Messages" in captured.out
+        assert "│ 250" in captured.out
+        assert "│ 30" in captured.out
+        assert "iCloud" in captured.out
+        assert "Gmail" in captured.out
+        assert "INBOX" in captured.out
 
     @patch("mxctl.commands.mail.analytics.run")
     def test_stats_without_all_flag_single_mailbox(self, mock_run, mock_args, capsys):
@@ -64,7 +73,9 @@ class TestEnhancedStats:
         cmd_stats(args)
 
         captured = capsys.readouterr()
-        assert "INBOX [iCloud]: 100 messages, 20 unread" in captured.out
+        assert "INBOX [iCloud]" in captured.out
+        assert "│ 100" in captured.out
+        assert "│ 20" in captured.out
 
 
 class TestUndoLogging:
@@ -135,7 +146,7 @@ class TestUndoLogging:
         captured = capsys.readouterr()
         assert "Recent batch operations" in captured.out
         assert "batch-move" in captured.out
-        assert "2 messages" in captured.out
+        assert "│ 2" in captured.out
 
     def test_undo_list_empty_when_no_operations(self, tmp_path, monkeypatch, mock_args, capsys):
         """Test that undo --list shows appropriate message when empty."""
@@ -639,7 +650,8 @@ class TestUndoListFences:
         undo_module.cmd_undo_list(args)
 
         captured = capsys.readouterr()
-        assert "older than 30 days" in captured.out
+        assert "batch-delete" in captured.out
+        assert "│ 1" in captured.out
 
 
 class TestCmdUndoEdgeCases:
@@ -948,8 +960,9 @@ class TestStatsAllAccountsFix:
 
         captured = capsys.readouterr()
         assert "All Accounts" in captured.out
-        assert "[iCloud] INBOX" in captured.out
-        assert "[Gmail] INBOX" in captured.out
+        assert "iCloud" in captured.out
+        assert "Gmail" in captured.out
+        assert "INBOX" in captured.out
 
     @patch("mxctl.commands.mail.analytics.run")
     def test_stats_all_with_explicit_account_uses_single_account_script(self, mock_run, mock_args, capsys):

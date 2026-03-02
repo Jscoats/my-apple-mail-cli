@@ -280,9 +280,9 @@ class TestCmdProcessInbox:
         assert "FLAGGED" in captured.out
         assert "PEOPLE" in captured.out
         assert "NOTIFICATIONS" in captured.out
-        assert "[1]" in captured.out  # flagged message alias
-        assert "[2]" in captured.out  # people message alias
-        assert "[3]" in captured.out  # notification message alias
+        assert "Urgent task" in captured.out  # flagged message subject
+        assert "Hello from Alice" in captured.out  # people message subject
+        assert "Your receipt" in captured.out  # notification message subject
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +382,7 @@ class TestCmdCleanNewsletters:
 
         captured = capsys.readouterr()
         assert "newsletter@example.com" in captured.out
-        assert "4 messages" in captured.out
+        assert "4" in captured.out
         # alice@personal.com has only 1 message and no noreply pattern — should NOT appear
         assert "alice@personal.com" not in captured.out
 
